@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>إنقلها | لوحة الإدارة</title>
+<link rel="icon" href="logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css?v=23">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><img class="full" src="logo-wide.jpg" alt="إنقلها INQLHA"><img class="mark" src="logo-mark.jpg" alt="إنقلها"></div>
+    <nav class="nav" id="nav" aria-label="القائمة الرئيسية"></nav>
+    <div class="side-user"><span class="avatar">م</span><div>المدير<small>مدير النظام</small></div></div>
+  </aside>
+  <main class="main">
+    <header class="topbar" id="topbar">
+      <button class="icon-btn menu-btn" id="menu-btn" aria-label="القائمة"><i class="ti ti-menu-2"></i></button>
+      <button class="search-trigger" id="search-trigger"><i class="ti ti-search"></i><span>ابحث عن موظف، سيارة، فاتورة، جهاز...</span><kbd>Ctrl K</kbd></button>
+      <div class="top-spacer"></div>
+      <button class="icon-btn lang-btn" id="lang-btn">EN</button>
+      <button class="icon-btn" id="eye-btn" aria-label="إظهار الرواتب والبيانات الحساسة" title="إظهار/إخفاء الرواتب والبيانات الحساسة"><i class="ti ti-eye-off"></i></button>
+      <button class="icon-btn" id="bell-btn" aria-label="التنبيهات" title="التنبيهات"><i class="ti ti-bell"></i></button>
+    </header>
+    <div class="page" id="page"></div>
+  </main>
+</div>
+<div id="layer"></div>
+<div id="toast" class="toast" role="status"><i class="ti ti-circle-check"></i><span></span><button></button></div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="i18n.js?v=23"></script>
+<script src="config.js?v=23"></script>
+<script src="schema.js?v=23"></script>
+<script src="cloud.js?v=23"></script>
+<script src="app.js?v=23"></script>
+<script src="payroll.js?v=23"></script>
+<script src="payreq.js?v=23"></script>
+</body>
+</html>
