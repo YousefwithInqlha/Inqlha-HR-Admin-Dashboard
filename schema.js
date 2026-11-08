@@ -8,6 +8,9 @@ const addYears = (s, y) => { const d = parseDate(s); if (!d || !num(y)) return '
 const yearsSince = s => { const d = parseDate(s); if (!d) return 0; return Math.max(0, (parseDate(todayStr()) - d) / (365.25 * 86400000)); };
 const round2 = n => Math.round(n * 100) / 100;
 const addDays = (s, n) => { const d = parseDate(s); if (!d) return ''; d.setDate(d.getDate() + n); return iso(d); };
+/* same day n months later; the 31st becomes the last day of a shorter month */
+const addMonths = (s, n) => { const d = parseDate(s); if (!d) return ''; const t = new Date(d.getFullYear(), d.getMonth() + n, 1); t.setDate(Math.min(d.getDate(), new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate())); return iso(t); };
+const monthsBetween = (a, b) => (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5, 7) - +a.slice(5, 7));
 
 const PERIOD_MONTHS = { 'شهري': 1, 'كل 3 شهور': 3, 'كل 6 شهور': 6, 'سنوي': 12 };
 
@@ -52,7 +55,8 @@ const STATIC = {
   payPeriod: Object.keys(PERIOD_MONTHS),
   propType: ['سكن', 'مكتب'],
   payMethod: ['تحويل', 'كاش', 'شيك', 'سداد', 'خصم تلقائي'],
-  billFreq: ['شهري', 'كل 3 شهور', 'سنوي', 'مرة واحدة'],
+  billFreq: ['مرة واحدة', 'شهري', 'كل 3 شهور', 'كل 6 شهور', 'سنوي'],
+  billPay: ['سداد', 'تحويل بنكي'],
   amountType: ['ثابت', 'متغير'],
   assetType: ['لابتوب', 'موبايل', 'شاشة', 'شريحة', 'تابلت', 'أخرى'],
   assetCond: ['جديد', 'كويس', 'محتاج صيانة', 'عطلان'],
@@ -70,6 +74,20 @@ function migrate(d) {
   if (!d.attendance) d.attendance = [];
   /* the medical policy end date used to be typed in; it now follows from the start date (+1 year) */
   (d.employees || []).forEach(e => { if (e.medicalExpiry && !e.medicalStart) e.medicalStart = addDays(addYears(e.medicalExpiry, -1), 1); delete e.medicalExpiry; });
+  /* bills: only SADAD or bank transfer; recurring bills keep a first due date instead of a day of the month */
+  (d.bills || []).forEach(b => {
+    if (b.payMethod !== 'سداد' && b.payMethod !== 'تحويل بنكي') b.payMethod = b.payMethod === 'تحويل' ? 'تحويل بنكي' : 'سداد';
+    if (b.frequency !== 'مرة واحدة' && !b.dueDate && b.dueDay) {
+      const t = new Date(), day = Math.min(31, Math.max(1, num(b.dueDay) || 1));
+      const ym = iso(t).slice(0, 7);
+      const paid = (d.billPayments || []).some(p => p.billCode === b.code && p.month === ym);
+      const m = t.getMonth() + (paid ? 1 : 0);
+      b.dueDate = iso(new Date(t.getFullYear(), m, Math.min(day, new Date(t.getFullYear(), m + 1, 0).getDate())));
+    }
+    delete b.dueDay;
+    if (!Array.isArray(b.invoices)) b.invoices = [];
+    if (!Array.isArray(b.ibanCert)) b.ibanCert = [];
+  });
   d.settings = d.settings || {};
   if (!d.settings.accountant) d.settings.accountant = { name: '', phone: '', email: '' };
   return d;
@@ -89,17 +107,28 @@ const empTotal = r => num(r.basic) + num(r.housing) + num(r.transport) + num(r.c
 const empDeduction = r => round2(L.advancesOf(r.code).reduce((s, a) => s + Math.min(advMonthly(a), advRemaining(a)), 0));
 /* a one-time bill is due once on its own date, and is done after its first payment */
 const isOnceBill = r => r.frequency === 'مرة واحدة';
+const isTransferBill = r => r.payMethod === 'تحويل بنكي';
+/* a recurring bill is due on dueDate, then every N months after it. Each payment
+   counts for the due date nearest to the month it was recorded for, so paying a
+   bit early or late still closes the right period. The next due is the first one
+   that has no payment. */
 const nextBillDue = r => {
-  if (isOnceBill(r)) return L.billPays(r.code).length ? '' : (r.dueDate || '');
-  const day = Math.max(1, num(r.dueDay) || 1);
-  const t = parseDate(todayStr());
-  const onDay = (y, m) => new Date(y, m, Math.min(day, new Date(y, m + 1, 0).getDate()));
-  let d = onDay(t.getFullYear(), t.getMonth());
-  if (billPaidThisMonth(r)) d = onDay(t.getFullYear(), t.getMonth() + 1);
-  const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const pays = L.billPays(r.code);
+  if (isOnceBill(r)) return pays.length ? '' : (r.dueDate || '');
+  if (!r.dueDate) return '';
+  const step = PERIOD_MONTHS[r.frequency] || 1;
+  const done = new Set(pays.filter(p => p.month).map(p => Math.round(monthsBetween(r.dueDate, p.month) / step)));
+  let k = 0; while (done.has(k) && k < 1200) k++;
+  return addMonths(r.dueDate, k * step);
 };
-const billPaidThisMonth = r => isOnceBill(r) ? L.billPays(r.code).length > 0 : L.billPays(r.code).some(p => p.month === todayStr().slice(0, 7));
+const billState = r => {
+  const n = nextBillDue(r), t = todayStr();
+  if (!n) return L.billPays(r.code).length ? 'مدفوعة' : '';
+  if (n < t) return 'متأخرة';
+  if (n.slice(0, 7) === t.slice(0, 7)) return 'مش مدفوعة';
+  return L.billPays(r.code).length ? 'مدفوعة' : 'لسه مجاش ميعادها';
+};
+const billPaidThisMonth = r => billState(r) === 'مدفوعة';
 
 /*
   Field options:
@@ -302,6 +331,12 @@ const ENTITIES = {
   bills: {
     title: 'الفواتير', single: 'فاتورة', group: 'الفواتير', key: 'code', codePrefix: 'B-',
     sections: [
+      ['نوع الفاتورة', [
+        { k: 'frequency', l: 'الفاتورة دي بتتدفع', t: 'choice', o: 'billFreq', def: 'شهري', req: true },
+        { k: 'dueDate', l: 'تاريخ الاستحقاق', t: 'date', req: true, help: 'في الفاتورة المتكررة ده أول ميعاد، والمواعيد اللي بعده بتتحسب لوحدها' },
+        { k: 'amount', l: 'المبلغ', t: 'number', money: true, req: true, table: true, help: 'لو المبلغ بيتغير اكتب آخر مبلغ، وبيتحدث لوحده لما تسجل دفعة' },
+        { k: 'amountType', l: 'المبلغ ثابت ولا بيتغير؟', t: 'select', o: 'amountType' },
+      ]],
       ['بيانات الفاتورة', [
         { k: 'code', l: 'كود الفاتورة', req: true, unique: true, table: true },
         { k: 'serviceType', l: 'نوع الخدمة', t: 'select', o: 'serviceTypes', req: true, table: true },
@@ -309,22 +344,23 @@ const ENTITIES = {
         { k: 'city', l: 'المدينة', t: 'select', o: 'cities', table: true },
         { k: 'linkedContract', l: 'مربوطة بعقد إيجار', t: 'contract' },
         { k: 'provider', l: 'الشركة المقدمة للخدمة', t: 'select', o: 'providers', req: true, table: true },
-      ]],
-      ['بيانات السداد', [
-        { k: 'accountNo', l: 'رقم السداد', table: true, help: 'الرقم اللي المحاسب بيدخله في سداد عشان يدفع (رقم الحساب أو الاشتراك عند الشركة)' },
-        { k: 'sadad', l: 'رقم المفوتر (سداد)', help: 'رقم الشركة نفسها في سداد' },
-        { k: 'payMethod', l: 'طريقة الدفع', t: 'select', o: 'payMethod', def: 'سداد' },
-      ]],
-      ['الدفع', [
-        { k: 'frequency', l: 'دورية الفاتورة', t: 'select', o: 'billFreq', def: 'شهري', help: 'اختار "مرة واحدة" لفاتورة بتتدفع مرة وخلاص' },
-        { k: 'dueDay', l: 'ميعاد الدفع (يوم في الشهر)', t: 'number', req: true, v: 'day', table: true, show: r => !isOnceBill(r) },
-        { k: 'dueDate', l: 'تاريخ الاستحقاق', t: 'date', req: true, show: r => isOnceBill(r) },
-        { k: 'amountType', l: 'نوع المبلغ', t: 'select', o: 'amountType' },
-        { k: 'amount', l: 'آخر مبلغ', t: 'number', money: true, req: true, table: true, help: 'بيتحدث لوحده لما تسجل دفعة · في الفاتورة اللي مرة واحدة ده مبلغها' },
-        { k: 'avg3', l: 'متوسط آخر 3 شهور', money: true, calc: r => { const p = L.billPays(r.code).slice(0, 3); return p.length ? round2(p.reduce((s, x) => s + num(x.amount), 0) / p.length) : ''; } },
         { k: 'responsible', l: 'المسؤول عن الدفع', t: 'emp' },
-        { k: 'thisMonth', l: 'حالة الشهر ده', table: true, calc: r => billPaidThisMonth(r) ? 'مدفوعة' : 'مش مدفوعة' },
+      ]],
+      ['بيانات الدفع', [
+        { k: 'payMethod', l: 'هتتدفع إزاي؟', t: 'choice', o: 'billPay', def: 'سداد', req: true },
+        { k: 'sadad', l: 'رقم المفوتر', show: r => !isTransferBill(r), help: 'رقم الشركة نفسها في سداد' },
+        { k: 'accountNo', l: 'رقم السداد', table: true, req: true, show: r => !isTransferBill(r), help: 'الرقم اللي المحاسب بيدخله في سداد (رقم الحساب أو الاشتراك)' },
+        { k: 'beneficiary', l: 'اسم المستفيد', req: true, show: isTransferBill, help: 'زي ما هو مكتوب في شهادة الآيبان' },
+        { k: 'iban', l: 'رقم الآيبان (IBAN)', v: 'iban', req: true, show: isTransferBill },
+        { k: 'ibanCert', l: 'شهادة الآيبان', t: 'files', max: 1, show: isTransferBill, help: 'PDF أو صورة. بتتبعت للمحاسب مع طلب الدفع' },
+      ]],
+      ['المتابعة', [
+        { k: 'thisMonth', l: 'الحالة', table: true, calc: r => billState(r) },
         { k: 'nextDue', l: 'ميعاد الدفع الجاي', t: 'date', alert: 5, table: true, calc: r => nextBillDue(r) },
+        { k: 'avg3', l: 'متوسط آخر 3 دفعات', money: true, calc: r => { const p = L.billPays(r.code).slice(0, 3); return p.length ? round2(p.reduce((s, x) => s + num(x.amount), 0) / p.length) : ''; } },
+      ]],
+      ['المرفقات', [
+        { k: 'invoices', l: 'الفواتير', t: 'files', period: true, help: 'ارفع فاتورة كل فترة (PDF أو صورة). كل فاتورة بتترفع على ميعاد استحقاقها، وبتظهر في طلب الدفع بتاعه' },
       ]],
     ],
   },
@@ -421,8 +457,8 @@ function sampleData() {
       { code: 'RP-001', contractNo: 'PR-001', payDate: shift(-135), amount: 72000, from: shift(-135), to: shift(45), method: 'تحويل' },
     ],
     bills: [
-      { code: 'B-001', serviceType: 'نت', location: 'مكتب الرياض', city: 'الرياض', linkedContract: 'PR-001', provider: 'stc', frequency: 'شهري', dueDay: 7, amountType: 'ثابت', amount: 450, payMethod: 'سداد', responsible: 'E-001' },
-      { code: 'B-002', serviceType: 'كهرباء', location: 'سكن جدة', city: 'جدة', linkedContract: 'PR-002', provider: 'الشركة السعودية للكهرباء', frequency: 'شهري', dueDay: 15, amountType: 'متغير', amount: 620, payMethod: 'سداد' },
+      { code: 'B-001', serviceType: 'نت', location: 'مكتب الرياض', city: 'الرياض', linkedContract: 'PR-001', provider: 'stc', frequency: 'شهري', dueDate: shift(5), amountType: 'ثابت', amount: 450, payMethod: 'سداد', responsible: 'E-001' },
+      { code: 'B-002', serviceType: 'كهرباء', location: 'سكن جدة', city: 'جدة', linkedContract: 'PR-002', provider: 'الشركة السعودية للكهرباء', frequency: 'شهري', dueDate: shift(12), amountType: 'متغير', amount: 620, payMethod: 'سداد' },
     ],
     billPayments: [
       { code: 'BP-001', billCode: 'B-002', month: prevMonth(2), amount: 540, payDate: shift(-60) },

@@ -33,14 +33,27 @@ function pqNextCode() {
 function pqItemFrom(x) {
   const row = DB[x.ent][x.i];
   const base = { ent: x.ent, due: x.date, amount: x.amount, title: x.title, icon: x.icon };
-  if (x.ent === 'bills') {
-    return { ...base, ref: row.code, payTo: row.provider || '', method: row.payMethod || 'سداد', biller: row.sadad || '', sadadNo: row.accountNo || '', iban: '', month: x.date.slice(0, 7) };
-  }
+  if (x.ent === 'bills') return { ...base, ref: row.code, month: x.date.slice(0, 7), ...pqBillPay(row) };
   const car = x.ent === 'cars';
   return { ...base, title: car ? `إيجار سيارة ${x.title}` : `إيجار ${x.title}`, ref: row.contractNo, payTo: (car ? row.rentalOffice : row.landlord) || '', method: 'تحويل', biller: '', sadadNo: '', iban: (car ? row.officeIban : row.landlordIban) || '', period: row.payPeriod || 'شهري' };
 }
-const pqMissing = it => it.ent === 'bills'
-  ? (it.method === 'سداد' && !it.sadadNo ? 'ناقص رقم السداد' : '')
+/* a bill line pays by SADAD, or by bank transfer to the beneficiary on the IBAN certificate */
+const pqBillPay = row => isTransferBill(row)
+  ? { payTo: row.beneficiary || row.provider || '', method: 'تحويل', biller: '', sadadNo: '', iban: row.iban || '' }
+  : { payTo: row.provider || '', method: 'سداد', biller: row.sadad || '', sadadNo: row.accountNo || '', iban: '' };
+/* unpaid bill lines follow the bill, so fixing an IBAN or SADAD number there fixes the request too */
+function pqSync(q) {
+  let changed = false;
+  q.items.forEach(it => {
+    if (it.ent !== 'bills' || it.paidAt) return;
+    const row = DB.bills.find(b => b.code === it.ref); if (!row) return;
+    const p = pqBillPay(row);
+    Object.keys(p).forEach(k => { if (it[k] !== p[k]) { it[k] = p[k]; changed = true; } });
+  });
+  if (changed) save();
+}
+const pqMissing = it => it.ent === 'bills' && it.method !== 'تحويل'
+  ? (!it.sadadNo ? 'ناقص رقم السداد' : '')
   : (!it.iban ? 'ناقص الـ IBAN' : '');
 function pqHowHTML(it) {
   if (it.ent === 'bills' && (it.sadadNo || it.biller)) return `${icon('receipt')} سداد${it.biller ? ` · المفوتر <b class="num">${esc(it.biller)}</b>` : ''}${it.sadadNo ? ` · رقم السداد <b class="num">${esc(it.sadadNo)}</b>` : ''}`;
@@ -132,6 +145,8 @@ function payReqFor(ent, ref) {
 /* ---------------- one request ---------------- */
 function openPayReq(code) {
   const q = DB.payRequests.find(x => x.code === code); if (!q) return;
+  pqSync(q);
+  const nFiles = pqSendFiles(q).length, share = canShareFiles();
   const st = pqStatusOf(q), open = st !== 'paid' && st !== 'cancelled';
   const unpaid = q.items.filter(x => !x.paidAt);
   const acc = DB.settings.accountant || {};
@@ -144,7 +159,7 @@ function openPayReq(code) {
         ${q.items.map((it, n) => `<label class="pq-row ${it.paidAt ? 'paid' : ''}">
           ${open && !it.paidAt ? `<input type="checkbox" data-pay="${n}" checked>` : `<span class="pq-ok">${it.paidAt ? icon('circle-check') : icon('point')}</span>`}
           <span class="avatar sq">${icon(it.icon || 'receipt')}</span>
-          <div class="txt"><b>${esc(it.title)}</b><small>${esc(it.payTo)} · الاستحقاق ${fmtDate(it.due)}${it.paidAt ? ` · اتدفع ${fmtDate(it.paidAt)}` : ''}</small><small class="how">${pqHowHTML(it)}${!it.paidAt && pqMissing(it) ? ` <span class="pill danger plain">${icon('alert-triangle')}${pqMissing(it)}</span>` : ''}</small></div>
+          <div class="txt"><b>${esc(it.title)}</b><small>${esc(it.payTo)} · الاستحقاق ${fmtDate(it.due)}${it.paidAt ? ` · اتدفع ${fmtDate(it.paidAt)}` : ''}</small><small class="how">${pqHowHTML(it)}${!it.paidAt && pqMissing(it) ? ` <span class="pill danger plain">${icon('alert-triangle')}${pqMissing(it)}</span>` : ''}</small>${pqFilesHTML(it, n)}</div>
           <div class="amt">${money(it.amount)}</div></label>`).join('')}
       </div></div>
       ${open ? `<div class="d-section"><h4>${icon('send')} ابعت للمحاسب${acc.name ? ` · ${esc(acc.name)}` : ''}</h4>
@@ -152,9 +167,11 @@ function openPayReq(code) {
           <button class="send-btn wa" data-send="wa">${icon('brand-whatsapp')}<b>واتساب</b><small>${acc.phone ? esc(acc.phone) : 'ضيف رقمه من الإعدادات'}</small></button>
           <button class="send-btn" data-send="mail">${icon('mail')}<b>إيميل</b><small>${acc.email ? esc(acc.email) : 'ضيف إيميله من الإعدادات'}</small></button>
           <button class="send-btn" data-send="copy">${icon('copy')}<b>نسخ النص</b><small>تلزقه في أي مكان</small></button>
-          <button class="send-btn" data-send="pdf">${icon('file-type-pdf')}<b>PDF</b><small>للطباعة أو الإرفاق</small></button>
+          <button class="send-btn" data-send="pdf">${icon('file-type-pdf')}<b>PDF${nFiles ? ' + المرفقات' : ''}</b><small>${nFiles ? `الطلب و${nFiles} مرفق في ملف واحد` : 'للطباعة أو الإرفاق'}</small></button>
+          ${nFiles ? share ? `<button class="send-btn" data-send="share">${icon('share')}<b>مشاركة بالمرفقات</b><small>واتساب أو أي تطبيق، والفواتير معاه</small></button>`
+            : `<button class="send-btn" data-send="files">${icon('paperclip')}<b>تنزيل المرفقات</b><small>${nFiles} ملف بأسماء مرتبة</small></button>` : ''}
           <button class="send-btn" data-send="xlsx">${icon('file-spreadsheet')}<b>Excel</b><small>بكل أرقام السداد</small></button>
-        </div></div>` : `<div class="actions" style="margin-top:16px"><button class="btn" data-send="pdf">${icon('file-type-pdf')}PDF</button><button class="btn" data-send="xlsx">${icon('file-spreadsheet')}Excel</button></div>`}
+        </div></div>` : `<div class="actions" style="margin-top:16px"><button class="btn" data-send="pdf">${icon('file-type-pdf')}PDF${nFiles ? ' + المرفقات' : ''}</button>${nFiles ? `<button class="btn" data-send="files">${icon('paperclip')}تنزيل المرفقات</button>` : ''}<button class="btn" data-send="xlsx">${icon('file-spreadsheet')}Excel</button></div>`}
     </div>
     <div class="d-foot">${open
       ? `<button class="btn accent" id="pq-paid">${icon('circle-check')}تسجيل اللي اتعلّم عليه كمدفوع</button><input type="date" class="input" id="pq-date" value="${todayStr()}" aria-label="تاريخ الدفع" style="width:auto">
@@ -164,6 +181,7 @@ function openPayReq(code) {
   panel.style.width = 'min(920px, 100vw)';
   $('#pq-x').onclick = closeLayer;
   $$('[data-send]', panel).forEach(b => b.onclick = () => pqSend(q, b.dataset.send));
+  $$('[data-pq-up]', panel).forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); pqUploadInvoice(q, q.items[+b.dataset.pqUp]); });
   const done = $('#pq-done'); if (done) done.onclick = closeLayer;
   if (open) {
     $('#pq-paid').disabled = !unpaid.length;
@@ -228,7 +246,8 @@ function pqText(q) {
     L1.push(`${n + 1}) ${it.title} — ${fmtNum(it.amount)} ر.س`);
     L1.push(`   الجهة: ${it.payTo || '—'} · الاستحقاق: ${fmtDate(it.due)}`);
     if (it.ent === 'bills' && (it.sadadNo || it.biller)) L1.push(`   سداد: ${it.biller ? `المفوتر ${it.biller} · ` : ''}رقم السداد ${it.sadadNo || '—'}`);
-    else if (it.iban) L1.push(`   تحويل: ${it.iban}`);
+    else if (it.iban) L1.push(`   تحويل: ${it.payTo || '—'} · IBAN ${it.iban}`);
+    if (it.ent === 'bills') { const fs = pqAllFiles(it); L1.push(fs.length ? `   المرفقات: ${fs.map(x => x.kind).join(' + ')}` : '   المرفقات: مفيش فاتورة مرفقة'); }
     L1.push('');
   });
   L1.push(`*الإجمالي: ${fmtNum(round2(pqTotal(q) - pqPaidTotal(q)))} ر.س*`);
@@ -251,7 +270,9 @@ function pqSend(q, how) {
     const t = pqText(q);
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('اتنسخ نص الطلب'), () => prompt('انسخ النص ده:', t));
     if (q.status === 'draft') pqMarkSent(q, 'نسخ النص');
-  } else if (how === 'pdf') pqPrint(q);
+  } else if (how === 'share') pqShare(q);
+  else if (how === 'files') pqDownloadFiles(q);
+  else if (how === 'pdf') pqPrint(q);
   else if (how === 'xlsx') pqExcel(q);
 }
 function pqExcel(q) {
@@ -269,9 +290,14 @@ function pqExcel(q) {
   XLSX.utils.book_append_sheet(wb, ws, q.code);
   XLSX.writeFile(wb, `${tr('طلب دفع')} ${q.code}.xlsx`);
 }
-function pqPrint(q) {
+async function pqPrint(q) {
   const logo = new URL('logo-wide.jpg', location.href).href;
   const en = LANG === 'en', T = s => esc(tr(s));
+  if (pqSendFiles(q).length) toast('بيجهز المرفقات...');
+  let att = { html: '', count: 0 };
+  try { att = await pqAttachPagesHTML(q, T); } catch (e) { alert('مقدرتش أحط المرفقات في الملف. هيطلع الطلب لوحده، ونزّل المرفقات من زرار "تنزيل المرفقات".'); }
+  let attNo = 0;
+  const attOf = it => pqAllFiles(it).map(x => `<span>${T('مرفق')} ${++attNo}: ${T(x.kind)}</span>`).join('');
   const f = n => num(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const html = `<!DOCTYPE html><html lang="${en ? 'en' : 'ar'}" dir="${en ? 'ltr' : 'rtl'}"><head><meta charset="utf-8"><title>${T('طلب دفع')} ${esc(q.code)}</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
@@ -293,19 +319,25 @@ function pqPrint(q) {
     .note { margin-top: 12px; background: #eef6ff; color: #1d4f8a; padding: 10px 12px; border-radius: 8px; }
     .sign { display: flex; gap: 20px; margin-top: 46px; } .sign div { flex: 1; border-top: 1px solid #9fb3b1; padding-top: 5px; text-align: center; color: #5d7473; }
     footer { margin-top: 18px; color: #8aa09e; font-size: 9px; display: flex; justify-content: space-between; }
+    .item .pay span.att-ref { background: #e4f7ea; color: #0d7a3a; }
+    .att { break-before: page; page-break-before: always; display: flex; flex-direction: column; height: 262mm; }
+    .att-h { display: flex; gap: 10px; align-items: baseline; background: #014546; color: #fff; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 11px; }
+    .att-h b { color: #55f47f; font-size: 12.5px; white-space: nowrap; }
+    .att img { flex: 1; min-height: 0; width: 100%; object-fit: contain; object-position: top center; }
+    .att-miss, .att-more { color: #a66300; background: #fff3dc; padding: 10px 12px; border-radius: 8px; }
   </style></head><body>
   <header><div><h1>${T('طلب دفع')} ${esc(q.code)}</h1><p>${T('التاريخ')}: ${esc(q.date)} · ${q.items.length} ${T('بند')}</p></div><img src="${logo}" alt="INQLHA"></header><div class="strip"></div>
   ${q.items.map((it, n) => `<div class="item ${it.paidAt ? 'paid' : ''}"><span class="n">${n + 1}</span><div><b>${T(it.title)}</b><small>${T(it.payTo || '—')} · ${T('الاستحقاق')} <span class="num">${esc(it.due)}</span>${it.paidAt ? ` · ${T('اتدفع')} <span class="num">${esc(it.paidAt)}</span>` : ''}</small>
-    <div class="pay">${it.ent === 'bills' && (it.sadadNo || it.biller) ? `<span>${T('سداد')}</span>${it.biller ? `<span>${T('رقم المفوتر')}: <b class="num">${esc(it.biller)}</b></span>` : ''}<span>${T('رقم السداد')}: <b class="num">${esc(it.sadadNo || '—')}</b></span>` : it.iban ? `<span>${T('تحويل')}</span><span>IBAN: <b class="num">${esc(it.iban)}</b></span>` : `<span>${T(it.method || '—')}</span>`}</div></div>
+    <div class="pay">${it.ent === 'bills' && (it.sadadNo || it.biller) ? `<span>${T('سداد')}</span>${it.biller ? `<span>${T('رقم المفوتر')}: <b class="num">${esc(it.biller)}</b></span>` : ''}<span>${T('رقم السداد')}: <b class="num">${esc(it.sadadNo || '—')}</b></span>` : it.iban ? `<span>${T('تحويل')}</span><span>IBAN: <b class="num">${esc(it.iban)}</b></span>` : `<span>${T(it.method || '—')}</span>`}${attOf(it).replace(/<span>/g, '<span class="att-ref">')}</div></div>
     <div class="amt num">${f(it.amount)} ${T('ر.س')}</div></div>`).join('')}
   <div class="total"><span>${T('الإجمالي')}</span><b class="num">${f(pqTotal(q))} ${T('ر.س')}</b></div>
   ${q.note ? `<div class="note">${T('ملاحظة')}: ${esc(q.note)}</div>` : ''}
   <div class="sign"><div>${T('طلبه')}</div><div>${T('اعتمده')}</div><div>${T('المحاسب')}</div></div>
-  <footer><span>INQLHA · ${T('طلب دفع')}</span><span>${todayStr()}</span></footer></body></html>`;
+  <footer><span>INQLHA · ${T('طلب دفع')}${att.count ? ` · ${att.count} ${T('مرفق')}` : ''}</span><span>${todayStr()}</span></footer>${att.html}</body></html>`;
   const fr = document.createElement('iframe');
   fr.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.appendChild(fr);
-  fr.onload = () => { setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { alert('مقدرتش أفتح الطباعة. جرّب من متصفح تاني.'); } setTimeout(() => fr.remove(), 60000); }, 700); };
+  fr.onload = () => { const imgs = [...fr.contentDocument.images]; Promise.all(imgs.map(i => i.decode ? i.decode().catch(() => {}) : 0)).then(() => setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { alert('مقدرتش أفتح الطباعة. جرّب من متصفح تاني.'); } setTimeout(() => fr.remove(), 60000); }, 500)); };
   fr.srcdoc = html;
   toast('اختار "Save as PDF" من نافذة الطباعة');
 }

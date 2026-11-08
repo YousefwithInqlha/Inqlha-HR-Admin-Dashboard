@@ -47,7 +47,7 @@ const INACTIVE = ['منتهي', 'مستقيل', 'منتهي عقده'];
 const toSar = (amount, currency) => currency === 'جنيه' ? num(amount) * num(DB.settings.egpToSar) : num(amount);
 const MASK = '<span class="masked">••••</span>';
 const icon = n => `<i class="ti ti-${n}" aria-hidden="true"></i>`;
-const FIELD_ICONS = { kind: 'user-question', assignedCar: 'car', code: 'hash', nameAr: 'user', nameEn: 'language', nationality: 'flag', dob: 'cake', marital: 'heart', dependents: 'users', idNumber: 'id-badge-2', iqamaExpiry: 'calendar-exclamation', passportNo: 'book', passportExpiry: 'calendar-exclamation', phone: 'phone', companyEmail: 'mail', personalEmail: 'mail', emergencyName: 'urgent', emergencyRelation: 'users', emergencyPhone: 'phone-call', jobTitle: 'briefcase', department: 'sitemap', manager: 'user-star', joinDate: 'calendar-plus', contractYears: 'hourglass', contractEnd: 'calendar-x', probationEnd: 'calendar-check', serviceYears: 'clock', status: 'circle-check', lastDay: 'calendar-off', empType: 'id', country: 'world', workLocation: 'building', city: 'map-pin', saudizationCompany: 'building-community', saudizationFee: 'receipt-2', gosi: 'shield', gosiAmount: 'coins', medicalClass: 'heartbeat', medicalExpiry: 'calendar-heart', currency: 'currency', basic: 'wallet', housing: 'home', transport: 'car', cola: 'trending-up', comms: 'phone', other: 'plus', total: 'sum', payMethod: 'transfer', iban: 'building-bank', bank: 'building-bank', bankCode: 'code', advRemaining: 'cash', advDeduction: 'cash-off', net: 'wallet', eos: 'gift', licenseNo: 'license', licenseExpiry: 'calendar-exclamation', car: 'car', laptop: 'device-laptop', plate: 'car', carType: 'truck', color: 'palette', brand: 'tag', model: 'tag', driver: 'steering-wheel', rentalOffice: 'building-store', officeIban: 'building-bank', price: 'coins', payPeriod: 'repeat', periodAmount: 'calculator', nextPayment: 'calendar-due', startDate: 'calendar-plus', endDate: 'calendar-x', regExpiry: 'file-certificate', insuranceExpiry: 'shield-check', contractLink: 'link', contractNo: 'file-text', propType: 'building', address: 'map-2', residents: 'users', landlord: 'user', landlordIban: 'building-bank', amount: 'coins', payDate: 'calendar', from: 'calendar-event', to: 'calendar-event', method: 'credit-card', notes: 'notes', serviceType: 'category', location: 'map-pin', linkedContract: 'link', provider: 'building-store', accountNo: 'hash', sadad: 'receipt', frequency: 'repeat', dueDay: 'calendar', dueDate: 'calendar-event', amountType: 'adjustments', avg3: 'chart-line', responsible: 'user-check', thisMonth: 'circle-check', nextDue: 'calendar-due', billCode: 'receipt', month: 'calendar-month', type: 'category', serial: 'barcode', cpu: 'cpu', ram: 'database', storage: 'device-sd-card', screen: 'device-desktop', purchaseDate: 'shopping-cart', warrantyEnd: 'shield', condition: 'stethoscope', place: 'map-pin', empCode: 'user', handoverDate: 'calendar-share', formLink: 'signature', months: 'hourglass', monthly: 'calendar-repeat', paid: 'check', remaining: 'hourglass-low', loanType: 'tag', date: 'calendar', assetCode: 'device-laptop', fromEmp: 'user-minus', toEmp: 'user-plus' };
+const FIELD_ICONS = { kind: 'user-question', assignedCar: 'car', code: 'hash', nameAr: 'user', nameEn: 'language', nationality: 'flag', dob: 'cake', marital: 'heart', dependents: 'users', idNumber: 'id-badge-2', iqamaExpiry: 'calendar-exclamation', passportNo: 'book', passportExpiry: 'calendar-exclamation', phone: 'phone', companyEmail: 'mail', personalEmail: 'mail', emergencyName: 'urgent', emergencyRelation: 'users', emergencyPhone: 'phone-call', jobTitle: 'briefcase', department: 'sitemap', manager: 'user-star', joinDate: 'calendar-plus', contractYears: 'hourglass', contractEnd: 'calendar-x', probationEnd: 'calendar-check', serviceYears: 'clock', status: 'circle-check', lastDay: 'calendar-off', empType: 'id', country: 'world', workLocation: 'building', city: 'map-pin', saudizationCompany: 'building-community', saudizationFee: 'receipt-2', gosi: 'shield', gosiAmount: 'coins', medicalClass: 'heartbeat', medicalExpiry: 'calendar-heart', currency: 'currency', basic: 'wallet', housing: 'home', transport: 'car', cola: 'trending-up', comms: 'phone', other: 'plus', total: 'sum', payMethod: 'transfer', iban: 'building-bank', bank: 'building-bank', bankCode: 'code', advRemaining: 'cash', advDeduction: 'cash-off', net: 'wallet', eos: 'gift', licenseNo: 'license', licenseExpiry: 'calendar-exclamation', car: 'car', laptop: 'device-laptop', plate: 'car', carType: 'truck', color: 'palette', brand: 'tag', model: 'tag', driver: 'steering-wheel', rentalOffice: 'building-store', officeIban: 'building-bank', price: 'coins', payPeriod: 'repeat', periodAmount: 'calculator', nextPayment: 'calendar-due', startDate: 'calendar-plus', endDate: 'calendar-x', regExpiry: 'file-certificate', insuranceExpiry: 'shield-check', contractLink: 'link', contractNo: 'file-text', propType: 'building', address: 'map-2', residents: 'users', landlord: 'user', landlordIban: 'building-bank', amount: 'coins', payDate: 'calendar', from: 'calendar-event', to: 'calendar-event', method: 'credit-card', notes: 'notes', serviceType: 'category', location: 'map-pin', linkedContract: 'link', provider: 'building-store', accountNo: 'hash', sadad: 'receipt', beneficiary: 'user-dollar', ibanCert: 'certificate', invoices: 'file-invoice', frequency: 'repeat', dueDay: 'calendar', dueDate: 'calendar-event', amountType: 'adjustments', avg3: 'chart-line', responsible: 'user-check', thisMonth: 'circle-check', nextDue: 'calendar-due', billCode: 'receipt', month: 'calendar-month', type: 'category', serial: 'barcode', cpu: 'cpu', ram: 'database', storage: 'device-sd-card', screen: 'device-desktop', purchaseDate: 'shopping-cart', warrantyEnd: 'shield', condition: 'stethoscope', place: 'map-pin', empCode: 'user', handoverDate: 'calendar-share', formLink: 'signature', months: 'hourglass', monthly: 'calendar-repeat', paid: 'check', remaining: 'hourglass-low', loanType: 'tag', date: 'calendar', assetCode: 'device-laptop', fromEmp: 'user-minus', toEmp: 'user-plus' };
 const fIcon = f => `<i class="ti ti-${FIELD_ICONS[f.k] || (f.t === 'date' ? 'calendar' : f.money ? 'coins' : 'point')}" aria-hidden="true"></i>`;
 /* avatar: photo if there is one, else initials, else an icon tile */
 function avatarHTML(p, V, cls = '') {
@@ -128,7 +128,7 @@ const VIEW = {
     icon: 'receipt', filters: ['serviceType', 'city', 'provider'],
     primary: r => ({ title: `${r.serviceType} · ${r.location}`, sub: [isOnceBill(r) ? 'مرة واحدة' : '', r.provider, r.code].filter(Boolean).join(' · '), icon: { 'نت': 'wifi', 'كهرباء': 'bolt', 'مية': 'droplet', 'موبايل': 'device-mobile', 'خط أرضي': 'phone' }[r.serviceType] || 'receipt' }),
     cols: ['primary', 'city', 'amount', 'nextDue', 'thisMonth'],
-    facts: r => [['آخر مبلغ', fmtNum(r.amount) + ' ر.س'], ['رقم السداد', r.accountNo || '—'], ['الدفع الجاي', fmtDate(r.nextDue)]],
+    facts: r => [['المبلغ', fmtNum(r.amount) + ' ر.س'], ['الدورية', r.frequency || '—'], isTransferBill(r) ? ['تحويل بنكي', r.beneficiary || '—'] : ['رقم السداد', r.accountNo || '—'], ['الدفع الجاي', fmtDate(r.nextDue) || '—']],
     related: [{ ent: 'billPayments', by: 'billCode', title: 'سجل الدفعات' }],
     quick: r => [{ label: 'طلب دفع', icon: 'file-dollar', run: () => payReqFor('bills', r.code) }, { label: 'تسجيل دفعة', icon: 'cash-banknote', run: () => openForm('billPayments', null, { billCode: r.code, amount: r.amount }) }],
   },
@@ -171,7 +171,7 @@ const PAGES = {
 const TAB_ICON = { employees: 'users', advances: 'cash', payrolls: 'file-invoice', cars: 'car', properties: 'building', rentPayments: 'cash-banknote', bills: 'receipt', billPayments: 'history', payRequests: 'file-dollar', assets: 'device-laptop', assetHistory: 'history' };
 const TAB_LABEL = { payrolls: 'سجل الرواتب', employees: 'الموظفين', advances: 'السلف', cars: 'السيارات', properties: 'السكن والمكاتب', rentPayments: 'دفعات الإيجار', bills: 'الفواتير', billPayments: 'سجل الدفعات', payRequests: 'طلبات الدفع', assets: 'الأجهزة', assetHistory: 'سجل التسليم' };
 const pageOfEnt = ent => Object.keys(PAGES).find(p => (PAGES[p].tabs || []).includes(ent));
-const SECTION_ICONS = { 'التأمينات (GOSI)': 'shield', 'التأمين الطبي': 'heart-plus', 'رخصة القيادة': 'license', 'بيانات السداد': 'building-bank', 'موظف ولا سواق؟': 'steering-wheel', 'البيانات الشخصية': 'id', 'الوظيفة والعقد': 'briefcase', 'التوظيف ومكان الدوام': 'map-pin', 'التأمينات والتأمين الطبي': 'shield-check', 'الراتب': 'wallet', 'السلف ونهاية الخدمة': 'cash', 'السواقين': 'steering-wheel', 'مسحوب من الشيتات التانية': 'link', 'بيانات السيارة': 'car', 'الإيجار والدفع': 'cash-banknote', 'العقد والمستندات': 'file-text', 'البيانات الأساسية': 'building', 'المؤجر والدفع': 'user-dollar', 'العقد': 'file-text', 'بيانات الدفعة': 'cash-banknote', 'بيانات الفاتورة': 'receipt', 'الدفع': 'calendar-dollar', 'بيانات الجهاز': 'device-laptop', 'المواصفات': 'cpu', 'الشراء والحالة': 'shopping-cart', 'التسليم': 'user-share', 'بيانات السلفة': 'cash', 'الحركة': 'history' };
+const SECTION_ICONS = { 'نوع الفاتورة': 'repeat', 'بيانات الدفع': 'credit-card', 'المتابعة': 'calendar-due', 'المرفقات': 'paperclip', 'التأمينات (GOSI)': 'shield', 'التأمين الطبي': 'heart-plus', 'رخصة القيادة': 'license', 'بيانات السداد': 'building-bank', 'موظف ولا سواق؟': 'steering-wheel', 'البيانات الشخصية': 'id', 'الوظيفة والعقد': 'briefcase', 'التوظيف ومكان الدوام': 'map-pin', 'التأمينات والتأمين الطبي': 'shield-check', 'الراتب': 'wallet', 'السلف ونهاية الخدمة': 'cash', 'السواقين': 'steering-wheel', 'مسحوب من الشيتات التانية': 'link', 'بيانات السيارة': 'car', 'الإيجار والدفع': 'cash-banknote', 'العقد والمستندات': 'file-text', 'البيانات الأساسية': 'building', 'المؤجر والدفع': 'user-dollar', 'العقد': 'file-text', 'بيانات الدفعة': 'cash-banknote', 'بيانات الفاتورة': 'receipt', 'الدفع': 'calendar-dollar', 'بيانات الجهاز': 'device-laptop', 'المواصفات': 'cpu', 'الشراء والحالة': 'shopping-cart', 'التسليم': 'user-share', 'بيانات السلفة': 'cash', 'الحركة': 'history' };
 
 /* ---------------- alerts ---------------- */
 function alertOf(f, v, r) {
@@ -205,7 +205,7 @@ function dateCell(f, r) {
 }
 function statusPill(v) {
   if (!v) return '';
-  const cls = { 'على رأس العمل': 'ok', 'ساري': 'ok', 'متجدد': 'info', 'مدفوعة': 'ok', 'مش مدفوعة': 'warn', 'إجازة طويلة': 'warn', 'مع موظف': 'info', 'في المخزن': '', 'في الصيانة': 'warn', 'جديد': 'ok', 'كويس': 'ok', 'محتاج صيانة': 'warn', 'عطلان': 'danger' }[v];
+  const cls = { 'على رأس العمل': 'ok', 'ساري': 'ok', 'متجدد': 'info', 'مدفوعة': 'ok', 'مش مدفوعة': 'warn', 'متأخرة': 'danger', 'لسه مجاش ميعادها': 'info', 'إجازة طويلة': 'warn', 'مع موظف': 'info', 'في المخزن': '', 'في الصيانة': 'warn', 'جديد': 'ok', 'كويس': 'ok', 'محتاج صيانة': 'warn', 'عطلان': 'danger' }[v];
   return `<span class="pill ${cls ?? ''}">${esc(v)}</span>`;
 }
 function cellHTML(ent, k, r) {
@@ -234,6 +234,7 @@ function cellHTML(ent, k, r) {
 function plainValue(ent, f, r) {
   const v = r[f.k];
   if (v === '' || v == null || f.t === 'photo') return '';
+  if (f.t === 'files') return asFiles(v).map(x => x.name).join('، ');
   if (f.t === 'emp') return `${v} - ${empName(v)}`;
   if (f.t === 'contract') return `${v} - ${contractLabel(v)}`;
   if (f.t === 'bill') return `${v} - ${billLabel(v)}`;
@@ -440,7 +441,7 @@ function openDetail(ent, i) {
   const status = r.status || r.thisMonth || r.place;
   const av = avatarHTML(p, V, 'lg');
   const sections = E.sections.map(([title, fields]) => {
-    const vis = fields.filter(f => f.t !== 'photo' && (!f.show || f.show(r)) && r[f.k] !== '' && r[f.k] != null);
+    const vis = fields.filter(f => f.t !== 'photo' && (!f.show || f.show(r)) && r[f.k] !== '' && r[f.k] != null && !(Array.isArray(r[f.k]) && !r[f.k].length));
     if (!vis.length) return '';
     return `<div class="d-section"><h4>${title}</h4><dl class="kv">${vis.map(f => `<div><dt>${fIcon(f)}${esc(f.l)}</dt><dd>${detailValue(ent, f, r)}</dd></div>`).join('')}</dl></div>`;
   }).join('');
@@ -500,6 +501,7 @@ function detailValue(ent, f, r) {
   if (f.t === 'contract') return esc(contractLabel(v));
   if (f.t === 'bill') return esc(billLabel(v));
   if (f.t === 'url') return `<a href="${esc(v)}" target="_blank" rel="noopener">فتح الرابط ${icon('external-link')}</a>`;
+  if (f.t === 'files') return filesViewHTML(f, v);
   if (f.money) return money(v, ent === 'employees' ? curOf(r) : 'ر.س');
   if (f.v === 'iban') return `<span class="num">${esc(v)}</span>`;
   return esc(v);
@@ -549,6 +551,8 @@ function inputFor(f, v) {
   const val = esc(v ?? '');
   if (f.t === 'photo') return `<div class="photo-up"><div class="emp-photo" id="ph-prev">${v ? `<img src="${val}" alt="">` : icon('camera')}</div><div class="btns"><label class="btn sm">${icon('upload')}${v ? 'تغيير الصورة' : 'رفع صورة'}<input type="file" accept="image/*" hidden id="ph-file"></label><button type="button" class="btn sm ghost danger" id="ph-del" ${v ? '' : 'hidden'}>${icon('trash')}إزالة</button><small class="muted">JPG أو PNG · بتتصغر لوحدها</small></div><input type="hidden" data-k="photo" value="${val}"></div>`;
   if (f.calc) return `<input data-k="${f.k}" readonly tabindex="-1" value="${val}">`;
+  if (f.t === 'choice') return `<div class="choice-row" role="radiogroup" id="f-${f.k}">${options(f.o).map(o => `<button type="button" role="radio" class="choice-pill ${o === v ? 'on' : ''}" aria-checked="${o === v}" data-pick="${f.k}" data-val="${esc(o)}">${esc(o)}</button>`).join('')}</div><input type="hidden" data-k="${f.k}" value="${val}">`;
+  if (f.t === 'files') return filesInputHTML(f, v);
   if (['select', 'emp', 'contract', 'bill', 'car'].includes(f.t)) return `<select data-k="${f.k}" id="f-${f.k}">${optionList(f, v)}</select>`;
   if (f.t === 'textarea') return `<textarea data-k="${f.k}" id="f-${f.k}" rows="2">${val}</textarea>`;
   const type = { number: 'number', date: 'date', month: 'month', email: 'email', url: 'url' }[f.t] || 'text';
@@ -585,7 +589,7 @@ function openForm(ent, idx, prefill = {}, focusKey) {
       ${secs.length >= 2 ? `<nav class="form-nav">${secs.map(([t], n) => `<button type="button" data-goto="${n}">${`<span class="n">${n + 1}</span>`}${esc(t)}</button>`).join('')}</nav>` : ''}
       <form class="form-body" id="fbody" novalidate>
         ${secs.map(([title, fields], n) => `<section class="fsec" id="sec-${n}" data-sec="${n}"><h3>${icon(SECTION_ICONS[title] || 'point')}${esc(title)}</h3><div class="fgrid">
-          ${fields.map(f => `<div class="f ${f.t === 'textarea' || f.t === 'photo' ? 'full' : ''}" data-f="${f.k}"><label for="f-${f.k}">${f.t === 'photo' ? '' : fIcon(f)}${esc(f.l)}${f.req ? ' <span class="req">*</span>' : ''}</label>${inputFor(f, f.calc ? calcDisplay(f, r[f.k]) : r[f.k])}
+          ${fields.map(f => `<div class="f ${['textarea', 'photo', 'choice', 'files'].includes(f.t) ? 'full' : ''}" data-f="${f.k}"><label for="f-${f.k}">${f.t === 'photo' ? '' : fIcon(f)}${esc(f.l)}${f.req ? ' <span class="req">*</span>' : ''}</label>${inputFor(f, f.calc ? calcDisplay(f, r[f.k]) : r[f.k])}
             ${f.calc ? `<div class="help">${icon('calculator')}${esc(f.help || 'بيتحسب لوحده')}</div>` : f.help ? `<div class="help">${esc(f.help)}</div>` : ''}<div class="err"></div></div>`).join('')}
         </div></section>`).join('')}
       </form>
@@ -615,6 +619,13 @@ function openForm(ent, idx, prefill = {}, focusKey) {
   body.addEventListener('input', e => { const w = e.target.closest('.f'); if (w) w.classList.remove('invalid'); refresh(); });
   body.addEventListener('change', refresh);
   $$('[data-goto]', panel).forEach(b => b.onclick = () => $(`#sec-${b.dataset.goto}`).scrollIntoView({ block: 'start' }));
+  body.addEventListener('click', e => {
+    const p = e.target.closest('[data-pick]'); if (!p) return;
+    $(`[data-k="${p.dataset.pick}"]`, body).value = p.dataset.val;
+    $$(`[data-pick="${p.dataset.pick}"]`, body).forEach(b => { b.classList.toggle('on', b === p); b.setAttribute('aria-checked', b === p); });
+    body.dispatchEvent(new Event('input'));
+  });
+  bindFileFields(ent, body, read);
 const phFile = $('#ph-file', panel);
 if (phFile) {
   const setPhoto = url => { $('[data-k="photo"]', body).value = url; $('#ph-prev', panel).innerHTML = url ? `<img src="${url}" alt="">` : icon('camera'); $('#ph-del', panel).hidden = !url; body.dispatchEvent(new Event('input')); };
@@ -633,7 +644,7 @@ if (phFile) {
 
   const doSave = andNew => {
     const vals = read();
-    allFields(ent).forEach(f => { if (f.show && !f.show(vals)) vals[f.k] = ''; if (f.v === 'iban' && vals[f.k]) vals[f.k] = vals[f.k].replace(/\s/g, '').toUpperCase(); });
+    allFields(ent).forEach(f => { if (f.show && !f.show(vals)) vals[f.k] = ''; if (f.v === 'iban' && vals[f.k]) vals[f.k] = vals[f.k].replace(/\s/g, '').toUpperCase(); if (f.t === 'files') vals[f.k] = asFiles(vals[f.k]); });
     const errs = validate(ent, vals, editing ? idx : -1);
     $$('.f', body).forEach(w => { const m = errs[w.dataset.f]; w.classList.toggle('invalid', !!m); $('.err', w).textContent = m || ''; });
     $$('[data-goto]', panel).forEach(b => b.classList.toggle('err', $$('.f.invalid', $(`#sec-${b.dataset.goto}`)).length > 0));
@@ -680,6 +691,7 @@ function validate(ent, v, idx) {
 }
 
 function afterSave(ent, vals, old) {
+  if (old) allFields(ent).filter(f => f.t === 'files').forEach(f => { const keep = new Set(asFiles(vals[f.k]).map(x => x.id)); asFiles(old[f.k]).forEach(x => { if (!keep.has(x.id)) FILES.del(x.id); }); });
   if (ent === 'employees') {
     if (old && old.code !== vals.code) DB.cars.forEach(c => { if (c.driver === old.code) c.driver = vals.code; });
     if (vals.kind === 'سواق') {
