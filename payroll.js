@@ -39,13 +39,15 @@ function buildLine(e, month) {
   const notes = [];
   if (startIn) notes.push(`Start Date : ${sd} ${MONTHS_EN[b.mo - 1]}`);
   if (endIn) notes.push(`End Date : ${ed} ${MONTHS_EN[b.mo - 1]}`);
+  const absent = (DB.attendance || []).filter(a => a.empCode === e.code && a.type === 'غياب' && a.date >= b.start && a.date <= b.end && (!startIn || a.date >= e.joinDate) && (!endIn || a.date <= e.lastDay)).length;
+  if (absent) notes.push(`Absence : ${absent} day${absent > 1 ? 's' : ''}`);
   const loans = L.advancesOf(e.code).filter(a => advRemaining(a) > 0).map(a => ({ code: a.code, amount: round2(Math.min(advMonthly(a), advRemaining(a))), type: a.loanType || 'سلفة نقدية' }));
   const loanTypes = [...new Set(loans.map(x => LOAN_EN[x.type] || 'Loan'))];
   if (loanTypes.length) notes.push(loanTypes.join(' + '));
   return {
     empCode: e.code, name: e.nameAr, nameEn: e.nameEn || '', nationality: e.nationality || '', position: e.jobTitle || '',
     basic: num(e.basic), housing: num(e.housing), transport: num(e.transport), cola: num(e.cola), other: num(e.other), telecom, overtime: 0,
-    worked, attendance: round2(fixed * (30 - worked) / 30), loans, loanDed: round2(loans.reduce((s, x) => s + x.amount, 0)), otherDed: 0,
+    worked, attendance: round2(fixed * (30 - worked + absent) / 30), absent, loans, loanDed: round2(loans.reduce((s, x) => s + x.amount, 0)), otherDed: 0,
     note: notes.join(' + '), payMethod: e.payMethod || (e.country === 'السعودية' ? 'مدد' : 'تحويل'),
     bank: e.bank || '', bankCode: BANK_CODES[e.bank] || '', iban: e.iban || '', idNumber: e.idNumber || '', city: CITY_EN[e.city] || e.city || '', include: true,
   };

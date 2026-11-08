@@ -3,7 +3,7 @@
    ===================================================================== */
 const STORE = 'inqlha-admin-v1';
 let DB = load();
-const UI = { page: 'dashboard', tab: null, search: '', filters: {}, sort: null };
+const UI = { page: 'dashboard', tab: null, search: '', filters: {}, sort: null, profile: null };
 
 /* fill in anything an older copy of the data is missing */
 function normalize(s) {
@@ -23,7 +23,7 @@ function load() {
 }
 /* a fresh start: no records, default dropdown lists (sample data is still available from Settings) */
 function emptyDB() {
-  const d = { lists: JSON.parse(JSON.stringify(DEFAULT_LISTS)), settings: { egpToSar: 0.077, showSensitive: true, accountant: { name: '', phone: '', email: '' } }, payrolls: [], payRequests: [] };
+  const d = { lists: JSON.parse(JSON.stringify(DEFAULT_LISTS)), settings: { egpToSar: 0.077, showSensitive: true, accountant: { name: '', phone: '', email: '' } }, payrolls: [], payRequests: [], attendance: [] };
   Object.keys(ENTITIES).forEach(k => { d[k] = []; });
   return d;
 }
@@ -171,7 +171,7 @@ const PAGES = {
 const TAB_ICON = { employees: 'users', advances: 'cash', payrolls: 'file-invoice', cars: 'car', properties: 'building', rentPayments: 'cash-banknote', bills: 'receipt', billPayments: 'history', payRequests: 'file-dollar', assets: 'device-laptop', assetHistory: 'history' };
 const TAB_LABEL = { payrolls: 'سجل الرواتب', employees: 'الموظفين', advances: 'السلف', cars: 'السيارات', properties: 'السكن والمكاتب', rentPayments: 'دفعات الإيجار', bills: 'الفواتير', billPayments: 'سجل الدفعات', payRequests: 'طلبات الدفع', assets: 'الأجهزة', assetHistory: 'سجل التسليم' };
 const pageOfEnt = ent => Object.keys(PAGES).find(p => (PAGES[p].tabs || []).includes(ent));
-const SECTION_ICONS = { 'بيانات السداد': 'building-bank', 'موظف ولا سواق؟': 'steering-wheel', 'البيانات الشخصية': 'id', 'الوظيفة والعقد': 'briefcase', 'التوظيف ومكان الدوام': 'map-pin', 'التأمينات والتأمين الطبي': 'shield-check', 'الراتب': 'wallet', 'السلف ونهاية الخدمة': 'cash', 'السواقين': 'steering-wheel', 'مسحوب من الشيتات التانية': 'link', 'بيانات السيارة': 'car', 'الإيجار والدفع': 'cash-banknote', 'العقد والمستندات': 'file-text', 'البيانات الأساسية': 'building', 'المؤجر والدفع': 'user-dollar', 'العقد': 'file-text', 'بيانات الدفعة': 'cash-banknote', 'بيانات الفاتورة': 'receipt', 'الدفع': 'calendar-dollar', 'بيانات الجهاز': 'device-laptop', 'المواصفات': 'cpu', 'الشراء والحالة': 'shopping-cart', 'التسليم': 'user-share', 'بيانات السلفة': 'cash', 'الحركة': 'history' };
+const SECTION_ICONS = { 'رخصة القيادة': 'license', 'بيانات السداد': 'building-bank', 'موظف ولا سواق؟': 'steering-wheel', 'البيانات الشخصية': 'id', 'الوظيفة والعقد': 'briefcase', 'التوظيف ومكان الدوام': 'map-pin', 'التأمينات والتأمين الطبي': 'shield-check', 'الراتب': 'wallet', 'السلف ونهاية الخدمة': 'cash', 'السواقين': 'steering-wheel', 'مسحوب من الشيتات التانية': 'link', 'بيانات السيارة': 'car', 'الإيجار والدفع': 'cash-banknote', 'العقد والمستندات': 'file-text', 'البيانات الأساسية': 'building', 'المؤجر والدفع': 'user-dollar', 'العقد': 'file-text', 'بيانات الدفعة': 'cash-banknote', 'بيانات الفاتورة': 'receipt', 'الدفع': 'calendar-dollar', 'بيانات الجهاز': 'device-laptop', 'المواصفات': 'cpu', 'الشراء والحالة': 'shopping-cart', 'التسليم': 'user-share', 'بيانات السلفة': 'cash', 'الحركة': 'history' };
 
 /* ---------------- alerts ---------------- */
 function alertOf(f, v, r) {
@@ -260,6 +260,8 @@ function renderNav() {
 }
 function parseHash() {
   const [p, t] = (location.hash.slice(1) || 'dashboard').split('/');
+  UI.profile = p === 'emp' && t ? decodeURIComponent(t) : null;
+  if (UI.profile) { UI.page = 'employees'; UI.tab = 'employees'; return; }
   UI.page = PAGES[p] ? p : 'dashboard';
   const tabs = PAGES[UI.page].tabs;
   UI.tab = tabs ? (tabs.includes(t) ? t : tabs[0]) : null;
@@ -273,6 +275,7 @@ function render() {
   if (UI.page === 'dashboard') return renderDashboard();
   if (UI.page === 'alerts') return renderAlerts();
   if (UI.page === 'settings') return renderSettings();
+  if (UI.profile) return renderProfile();
   renderList();
 }
 function pageHead(title, desc, actions = '', ic = '') {
@@ -335,7 +338,7 @@ function renderList() {
   const E = ENTITIES[ent], V = VIEW[ent];
   const isEmp = ent === 'employees';
   const add = E.readonly ? '' : `<button class="btn accent" id="add">${icon('plus')}إضافة ${E.single}</button>`;
-  $('#page').innerHTML = pageHead(P.title, P.desc, `${payBtn}<button class="btn" id="xl">${icon('file-spreadsheet')}تصدير Excel</button>${add}`, P.icon) + tabsHTML(P, ent) + `
+  $('#page').innerHTML = pageHead(P.title, P.desc, `${payBtn}${isEmp ? `<button class="btn" id="gf-imp">${icon('file-import')}استيراد من Google Form</button>` : ''}<button class="btn" id="xl">${icon('file-spreadsheet')}تصدير Excel</button>${add}`, P.icon) + tabsHTML(P, ent) + `
     <div class="toolbar">
       <div class="search-box">${icon('search')}<input class="input" id="q" placeholder="بحث في ${TAB_LABEL[ent]}..." value="${esc(UI.search)}"></div>
       ${(V.filters || []).map(k => { const f = fieldOf(ent, k); const cur = UI.filters[k] || ''; const opts = [...new Set([...options(f.o), ...DB[ent].map(r => r[k]).filter(Boolean)])];
@@ -349,6 +352,7 @@ function renderList() {
   if ($('#add')) $('#add').onclick = () => openForm(ent);
   if ($('#pr-new')) $('#pr-new').onclick = () => openPayroll();
   if ($('#pq-new')) $('#pq-new').onclick = () => openPayReqNew();
+  if ($('#gf-imp')) $('#gf-imp').onclick = () => openFormImport();
   if (isEmp) { $('#v-cards').onclick = () => { UI.empView = 'cards'; renderList(); }; $('#v-table').onclick = () => { UI.empView = 'table'; renderList(); }; }
   $('#q').oninput = e => { UI.search = e.target.value; draw(); $('#clear').hidden = !UI.search && !Object.values(UI.filters).some(Boolean); };
   $$('[data-filter]').forEach(s => s.onchange = () => { UI.filters[s.dataset.filter] = s.value; renderList(); });
@@ -421,6 +425,13 @@ document.addEventListener('keydown', e => {
 
 /* ---------------- detail drawer ---------------- */
 function openDetail(ent, i) {
+  if (ent === 'employees' && DB.employees[i]) {
+    /* employees open as a full page */
+    const h = '#emp/' + encodeURIComponent(DB.employees[i].code);
+    closeLayer(); closeMenu();
+    if (location.hash === h) render(); else location.hash = h;
+    return;
+  }
   const E = ENTITIES[ent], V = VIEW[ent];
   const r = withCalc(ent, DB[ent][i]);
   const p = V.primary(r);

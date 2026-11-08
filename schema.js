@@ -42,6 +42,8 @@ const STATIC = {
   salaryPay: ['مدد', 'تحويل'],
   loanType: ['سلفة نقدية', 'سلفة سكن', 'أخرى'],
   yesno: ['نعم', 'لا'],
+  licenseType: ['خصوصي', 'نقل خفيف', 'نقل ثقيل', 'عمومي', 'دراجة نارية'],
+  bloodType: ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'],
   medicalClass: ['VIP', 'A', 'B', 'C'],
   carType: ['ملاكي', 'ساطحة'],
   contractStatus: ['ساري', 'متجدد', 'منتهي'],
@@ -63,6 +65,7 @@ function migrate(d) {
     delete e.assignedCar;
   });
   if (!d.payRequests) d.payRequests = [];
+  if (!d.attendance) d.attendance = [];
   d.settings = d.settings || {};
   if (!d.settings.accountant) d.settings.accountant = { name: '', phone: '', email: '' };
   return d;
@@ -109,8 +112,12 @@ const ENTITIES = {
       ['موظف ولا سواق؟', [
         { k: 'kind', l: 'موظف ولا سواق؟', t: 'select', o: 'empKind', req: true, def: 'موظف', table: true },
         { k: 'assignedCar', l: 'السيارة اللي بيسوقها', t: 'car', show: r => r.kind === 'سواق', help: 'من صفحة السيارات · لو العربية مع حد تاني هتتنقل للسواق ده' },
-        { k: 'licenseNo', l: 'رقم رخصة القيادة', show: r => r.kind === 'سواق' },
-        { k: 'licenseExpiry', l: 'انتهاء رخصة القيادة', t: 'date', alert: 30, show: r => r.kind === 'سواق' },
+      ]],
+      ['رخصة القيادة', [
+        { k: 'licenseNo', l: 'رقم رخصة القيادة', help: 'في السعودية غالباً نفس رقم الهوية' },
+        { k: 'licenseType', l: 'نوع الرخصة', t: 'select', o: 'licenseType' },
+        { k: 'licenseIssue', l: 'تاريخ إصدار الرخصة', t: 'date' },
+        { k: 'licenseExpiry', l: 'انتهاء رخصة القيادة', t: 'date', alert: 30 },
       ]],
       ['البيانات الشخصية', [
         { k: 'photo', l: 'صورة الموظف', t: 'photo' },
@@ -123,6 +130,10 @@ const ENTITIES = {
         { k: 'dependents', l: 'عدد التابعين', t: 'number' },
         { k: 'idNumber', l: 'رقم الهوية / الإقامة', sens: true, v: 'id' },
         { k: 'iqamaExpiry', l: 'تاريخ انتهاء الإقامة', t: 'date', alert: 60 },
+        { k: 'iqamaProfession', l: 'المهنة في الإقامة', help: 'زي ما هي مكتوبة في الإقامة · لو فاضية هيظهر المسمى الوظيفي' },
+        { k: 'iqamaEmployer', l: 'صاحب العمل في الإقامة', help: 'لو فاضية: شركة إنقلها، أو شركة السعودة' },
+        { k: 'iqamaIssuePlace', l: 'مكان إصدار الإقامة' },
+        { k: 'bloodType', l: 'فصيلة الدم', t: 'select', o: 'bloodType' },
         { k: 'passportNo', l: 'رقم الجواز', sens: true },
         { k: 'passportExpiry', l: 'تاريخ انتهاء الجواز', t: 'date', alert: 90 },
         { k: 'phone', l: 'الموبايل', table: true },
@@ -140,6 +151,7 @@ const ENTITIES = {
         { k: 'contractYears', l: 'مدة العقد (سنين)', t: 'number' },
         { k: 'contractEnd', l: 'تاريخ نهاية العقد', t: 'date', alert: 60, calc: r => addYears(r.joinDate, r.contractYears), help: 'بيتحسب أوتوماتيك' },
         { k: 'probationEnd', l: 'نهاية فترة التجربة', t: 'date', alert: 14 },
+        { k: 'leaveDays', l: 'الإجازة السنوية (يوم)', t: 'number', help: 'لو فاضية: 21 يوم، و30 بعد 5 سنين خدمة' },
         { k: 'serviceYears', l: 'مدة الخدمة (سنين)', calc: r => r.joinDate ? round2(yearsSince(r.joinDate)).toFixed(1) : '' },
         { k: 'status', l: 'حالة الموظف', t: 'select', o: 'empStatus', table: true, def: 'على رأس العمل' },
         { k: 'lastDay', l: 'آخر يوم عمل', t: 'date', show: r => ['مستقيل', 'منتهي عقده'].includes(r.status), help: 'بيُستخدم في حساب راتب آخر شهر' },
