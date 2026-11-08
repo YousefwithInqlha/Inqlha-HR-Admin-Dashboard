@@ -90,8 +90,9 @@ function empPDFHTML(e, r, opt, imgs) {
     ['التواصل والطوارئ', ['phone', 'companyEmail', 'personalEmail', 'city', 'emergencyName', 'emergencyRelation', 'emergencyPhone']],
     ['الوظيفة والعقد', ['code', 'kind', 'jobTitle', 'department', 'manager', 'status', 'empType', 'country', 'workLocation', 'saudizationCompany', 'saudizationFee', 'joinDate', 'contractYears', 'contractEnd', 'probationEnd', 'serviceYears', 'lastDay', 'leaveDays']],
     ['رخصة القيادة', ['licenseNo', 'licenseType', 'licenseIssue', 'licenseExpiry']],
-    ['التأمينات والتأمين الطبي', ['gosi', 'gosiAmount', 'medicalClass', 'medicalExpiry']],
-    ['الراتب والبنك', ['basic', 'housing', 'transport', 'cola', 'comms', 'other', 'total', 'advDeduction', 'net', 'currency', 'payMethod', 'bank', 'bankCode', 'iban', 'eos'], true],
+    ['التأمين الطبي', ['medicalInsurer', 'medicalClass', 'medicalPolicyNo', 'medicalMemberNo', 'medicalStart', 'medicalExpiry', 'medicalDependents']],
+    ['التأمينات (GOSI)', ['gosi', 'gosiAmount']],
+    ['الراتب والبنك', ['medicalCost', 'basic', 'housing', 'transport', 'cola', 'comms', 'other', 'total', 'advDeduction', 'net', 'currency', 'payMethod', 'bank', 'bankCode', 'iban', 'eos'], true],
   ];
   const SKIPK = ['photo', 'assignedCar', 'car', 'laptop', 'advRemaining'];
   const used = new Set(GROUPS.flatMap(g => g[1]));
@@ -112,7 +113,7 @@ function empPDFHTML(e, r, opt, imgs) {
   const tot = att.reduce((a, [, s]) => ({ work: a.work + s.work, absent: a.absent + s.absent, late: a.late + s.late, leave: a.leave + s.leave, sick: a.sick + s.sick, present: a.present + s.present }), { work: 0, absent: 0, late: 0, leave: 0, sick: 0, present: 0 });
   const totRate = tot.work - tot.leave - tot.sick > 0 ? Math.round((tot.present + tot.late) / (tot.work - tot.leave - tot.sick) * 100) : null;
   const card = k => imgs[k] ? `<img class="ep-cardimg" src="${imgs[k]}" alt="">` : (k === 'license' && !(e.licenseNo || e.licenseExpiry || e.kind === 'سواق')) ? '' : idCardHTML(e, k);
-  const docs = [['الإقامة / الهوية', e.idNumber, e.iqamaExpiry], ['رخصة القيادة', e.licenseNo, e.licenseExpiry], ['جواز السفر', e.passportNo, e.passportExpiry], ['التأمين الطبي', e.medicalClass && 'فئة ' + e.medicalClass, e.medicalExpiry], ['العقد', e.contractYears && e.contractYears + ' سنة', r.contractEnd]].filter(d => d[1] || d[2]);
+  const docs = [['الإقامة / الهوية', e.idNumber, e.iqamaExpiry], ['رخصة القيادة', e.licenseNo, e.licenseExpiry], ['جواز السفر', e.passportNo, e.passportExpiry], ['التأمين الطبي', [e.medicalInsurer, e.medicalClass && 'فئة ' + e.medicalClass].filter(Boolean).join(' · '), r.medicalExpiry], ['العقد', e.contractYears && e.contractYears + ' سنة', r.contractEnd]].filter(d => d[1] || d[2]);
   const docState = d => { if (!d) return ['—', '']; const n = daysUntil(d); return n < 0 ? ['منتهي', 'bad'] : n <= 60 ? [`ينتهي ${daysTxt(n)}`, 'warn'] : ['ساري', 'ok']; };
   const cars = L.carOf(e.code), assets = L.assetsOf(e.code), advs = L.advancesOf(e.code);
   const logo = new URL('logo-wide.jpg', location.href).href;
