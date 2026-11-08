@@ -7,6 +7,7 @@ const daysUntil = s => { const d = parseDate(s); if (!d) return null; const t = 
 const addYears = (s, y) => { const d = parseDate(s); if (!d || !num(y)) return ''; d.setFullYear(d.getFullYear() + Math.floor(num(y))); const m = Math.round((num(y) % 1) * 12); if (m) d.setMonth(d.getMonth() + m); return iso(d).slice(0, 10); };
 const yearsSince = s => { const d = parseDate(s); if (!d) return 0; return Math.max(0, (parseDate(todayStr()) - d) / (365.25 * 86400000)); };
 const round2 = n => Math.round(n * 100) / 100;
+const addDays = (s, n) => { const d = parseDate(s); if (!d) return ''; d.setDate(d.getDate() + n); return iso(d); };
 
 const PERIOD_MONTHS = { 'شهري': 1, 'كل 3 شهور': 3, 'كل 6 شهور': 6, 'سنوي': 12 };
 
@@ -21,10 +22,11 @@ const DEFAULT_LISTS = {
   serviceTypes: ['نت', 'كهرباء', 'مية', 'موبايل', 'خط أرضي', 'أخرى'],
   providers: ['stc', 'موبايلي', 'زين', 'الشركة السعودية للكهرباء', 'شركة المياه الوطنية'],
   nationalities: ['سعودي', 'مصري', 'أخرى'],
+  insurers: ['التعاونية', 'بوبا العربية', 'ميدغلف', 'الراجحي تكافل', 'ملاذ للتأمين', 'الجزيرة تكافل', 'جي آي جي (أكسا)', 'ولاء للتأمين'],
 };
 const LIST_LABELS = {
   cities: 'المدن', workLocations: 'أماكن الدوام', departments: 'الأقسام', banks: 'البنوك',
-  saudizationCompanies: 'شركات السعودة', serviceTypes: 'أنواع الخدمات (الفواتير)', providers: 'مقدمي الخدمات', nationalities: 'الجنسيات',
+  saudizationCompanies: 'شركات السعودة', serviceTypes: 'أنواع الخدمات (الفواتير)', providers: 'مقدمي الخدمات', nationalities: 'الجنسيات', insurers: 'شركات التأمين الطبي',
 };
 
 /* bank short codes used in the Mudad bank file, and English city names for its address column */
@@ -66,6 +68,8 @@ function migrate(d) {
   });
   if (!d.payRequests) d.payRequests = [];
   if (!d.attendance) d.attendance = [];
+  /* the medical policy end date used to be typed in; it now follows from the start date (+1 year) */
+  (d.employees || []).forEach(e => { if (e.medicalExpiry && !e.medicalStart) e.medicalStart = addDays(addYears(e.medicalExpiry, -1), 1); delete e.medicalExpiry; });
   d.settings = d.settings || {};
   if (!d.settings.accountant) d.settings.accountant = { name: '', phone: '', email: '' };
   return d;
@@ -164,11 +168,19 @@ const ENTITIES = {
         { k: 'saudizationCompany', l: 'شركة السعودة', t: 'select', o: 'saudizationCompanies', show: r => r.empType === 'سعودة' },
         { k: 'saudizationFee', l: 'رسوم شركة السعودة الشهرية', t: 'number', money: true, show: r => r.empType === 'سعودة' },
       ]],
-      ['التأمينات والتأمين الطبي', [
+      ['التأمينات (GOSI)', [
         { k: 'gosi', l: 'مسجل في التأمينات (GOSI)؟', t: 'select', o: 'yesno' },
         { k: 'gosiAmount', l: 'مبلغ اشتراك التأمينات', t: 'number', money: true, show: r => r.gosi === 'نعم' },
+      ]],
+      ['التأمين الطبي', [
+        { k: 'medicalInsurer', l: 'شركة التأمين الطبي', t: 'select', o: 'insurers', help: 'القايمة بتتعدل من الإعدادات' },
         { k: 'medicalClass', l: 'فئة التأمين الطبي', t: 'select', o: 'medicalClass' },
-        { k: 'medicalExpiry', l: 'انتهاء التأمين الطبي', t: 'date', alert: 30 },
+        { k: 'medicalPolicyNo', l: 'رقم البوليصة' },
+        { k: 'medicalMemberNo', l: 'رقم كارت العضوية' },
+        { k: 'medicalStart', l: 'تاريخ بداية البوليصة', t: 'date', help: 'البوليصة مدتها سنة' },
+        { k: 'medicalExpiry', l: 'نهاية البوليصة', t: 'date', alert: 30, calc: r => r.medicalStart ? addDays(addYears(r.medicalStart, 1), -1) : '', help: 'بتتحسب لوحدها: البداية + سنة' },
+        { k: 'medicalDependents', l: 'عدد التابعين المؤمن عليهم', t: 'number', help: 'الزوجة والأولاد اللي على نفس البوليصة' },
+        { k: 'medicalCost', l: 'تكلفة البوليصة السنوية', t: 'number', money: true, sens: true },
       ]],
       ['الراتب', [
         { k: 'currency', l: 'عملة الراتب', t: 'select', o: 'currency', def: 'ريال' },

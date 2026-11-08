@@ -93,7 +93,7 @@ const VIEW = {
       { ent: 'cars', by: 'driver', title: 'السيارات اللي معاه' },
       { ent: 'assets', by: 'empCode', title: 'العهد اللي معاه' },
     ],
-    quick: r => [{ label: 'إضافة سلفة', icon: 'cash', run: () => openForm('advances', null, { empCode: r.code }) }],
+    quick: r => [{ label: 'إضافة سلفة', icon: 'cash', run: () => openForm('advances', null, { empCode: r.code }) }, { label: 'ابعتله لينك يكمّل بياناته', icon: 'link-plus', run: () => openNewLink(r.code) }],
   },
   advances: {
     icon: 'cash', primary: r => ({ title: empName(r.empCode), sub: `${r.code} · ${fmtDate(r.date)}`, avatar: initials(empName(r.empCode)), photo: (L.emp(r.empCode) || {}).photo }),
@@ -171,7 +171,7 @@ const PAGES = {
 const TAB_ICON = { employees: 'users', advances: 'cash', payrolls: 'file-invoice', cars: 'car', properties: 'building', rentPayments: 'cash-banknote', bills: 'receipt', billPayments: 'history', payRequests: 'file-dollar', assets: 'device-laptop', assetHistory: 'history' };
 const TAB_LABEL = { payrolls: 'سجل الرواتب', employees: 'الموظفين', advances: 'السلف', cars: 'السيارات', properties: 'السكن والمكاتب', rentPayments: 'دفعات الإيجار', bills: 'الفواتير', billPayments: 'سجل الدفعات', payRequests: 'طلبات الدفع', assets: 'الأجهزة', assetHistory: 'سجل التسليم' };
 const pageOfEnt = ent => Object.keys(PAGES).find(p => (PAGES[p].tabs || []).includes(ent));
-const SECTION_ICONS = { 'رخصة القيادة': 'license', 'بيانات السداد': 'building-bank', 'موظف ولا سواق؟': 'steering-wheel', 'البيانات الشخصية': 'id', 'الوظيفة والعقد': 'briefcase', 'التوظيف ومكان الدوام': 'map-pin', 'التأمينات والتأمين الطبي': 'shield-check', 'الراتب': 'wallet', 'السلف ونهاية الخدمة': 'cash', 'السواقين': 'steering-wheel', 'مسحوب من الشيتات التانية': 'link', 'بيانات السيارة': 'car', 'الإيجار والدفع': 'cash-banknote', 'العقد والمستندات': 'file-text', 'البيانات الأساسية': 'building', 'المؤجر والدفع': 'user-dollar', 'العقد': 'file-text', 'بيانات الدفعة': 'cash-banknote', 'بيانات الفاتورة': 'receipt', 'الدفع': 'calendar-dollar', 'بيانات الجهاز': 'device-laptop', 'المواصفات': 'cpu', 'الشراء والحالة': 'shopping-cart', 'التسليم': 'user-share', 'بيانات السلفة': 'cash', 'الحركة': 'history' };
+const SECTION_ICONS = { 'التأمينات (GOSI)': 'shield', 'التأمين الطبي': 'heart-plus', 'رخصة القيادة': 'license', 'بيانات السداد': 'building-bank', 'موظف ولا سواق؟': 'steering-wheel', 'البيانات الشخصية': 'id', 'الوظيفة والعقد': 'briefcase', 'التوظيف ومكان الدوام': 'map-pin', 'التأمينات والتأمين الطبي': 'shield-check', 'الراتب': 'wallet', 'السلف ونهاية الخدمة': 'cash', 'السواقين': 'steering-wheel', 'مسحوب من الشيتات التانية': 'link', 'بيانات السيارة': 'car', 'الإيجار والدفع': 'cash-banknote', 'العقد والمستندات': 'file-text', 'البيانات الأساسية': 'building', 'المؤجر والدفع': 'user-dollar', 'العقد': 'file-text', 'بيانات الدفعة': 'cash-banknote', 'بيانات الفاتورة': 'receipt', 'الدفع': 'calendar-dollar', 'بيانات الجهاز': 'device-laptop', 'المواصفات': 'cpu', 'الشراء والحالة': 'shopping-cart', 'التسليم': 'user-share', 'بيانات السلفة': 'cash', 'الحركة': 'history' };
 
 /* ---------------- alerts ---------------- */
 function alertOf(f, v, r) {
@@ -338,7 +338,7 @@ function renderList() {
   const E = ENTITIES[ent], V = VIEW[ent];
   const isEmp = ent === 'employees';
   const add = E.readonly ? '' : `<button class="btn accent" id="add">${icon('plus')}إضافة ${E.single}</button>`;
-  $('#page').innerHTML = pageHead(P.title, P.desc, `${payBtn}${isEmp ? `<button class="btn" id="gf-imp">${icon('file-import')}استيراد من Google Form</button>` : ''}<button class="btn" id="xl">${icon('file-spreadsheet')}تصدير Excel</button>${add}`, P.icon) + tabsHTML(P, ent) + `
+  $('#page').innerHTML = pageHead(P.title, P.desc, `${payBtn}${isEmp ? `<button class="btn" id="fx-btn">${icon('forms')}بيانات من الموظفين</button><button class="btn" id="gf-imp">${icon('file-import')}استيراد من Google Form</button>` : ''}<button class="btn" id="xl">${icon('file-spreadsheet')}تصدير Excel</button>${add}`, P.icon) + tabsHTML(P, ent) + `
     <div class="toolbar">
       <div class="search-box">${icon('search')}<input class="input" id="q" placeholder="بحث في ${TAB_LABEL[ent]}..." value="${esc(UI.search)}"></div>
       ${(V.filters || []).map(k => { const f = fieldOf(ent, k); const cur = UI.filters[k] || ''; const opts = [...new Set([...options(f.o), ...DB[ent].map(r => r[k]).filter(Boolean)])];
@@ -353,6 +353,7 @@ function renderList() {
   if ($('#pr-new')) $('#pr-new').onclick = () => openPayroll();
   if ($('#pq-new')) $('#pq-new').onclick = () => openPayReqNew();
   if ($('#gf-imp')) $('#gf-imp').onclick = () => openFormImport();
+  if ($('#fx-btn')) { $('#fx-btn').onclick = () => openFormLinks(); fxBadge(); }
   if (isEmp) { $('#v-cards').onclick = () => { UI.empView = 'cards'; renderList(); }; $('#v-table').onclick = () => { UI.empView = 'table'; renderList(); }; }
   $('#q').oninput = e => { UI.search = e.target.value; draw(); $('#clear').hidden = !UI.search && !Object.values(UI.filters).some(Boolean); };
   $$('[data-filter]').forEach(s => s.onchange = () => { UI.filters[s.dataset.filter] = s.value; renderList(); });
