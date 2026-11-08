@@ -56,9 +56,8 @@ async function makeEmpPDF(e, opt) {
       html, body { background: #fff !important; margin: 0; }
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .epdf { width: auto; }
-      .ep-sec, .ep-hero, .ep-kpis, .ep-card, tr { break-inside: avoid; }
+      .ep-hero, .ep-kpis, .ep-cardgrid, .ep-sign, tr, .kr { break-inside: avoid; }
       .ep-sec h3 { break-after: avoid; }
-      .epdf-break { break-before: page; }
       .ep-foot { position: fixed; bottom: -10mm; left: 0; right: 0; display: flex; justify-content: space-between; font-size: 8.5px; color: #7a8f8d; border-top: 1px solid #e2eaea; padding-top: 3px; }
     </style></head>
     <body><div class="epdf">${body}</div><div class="ep-foot"><span>إنقلها · الملف الرقمي للموظف · سري</span><span>${esc(e.code)} · ${fmtDate(todayStr())}</span></div></body></html>`;
@@ -82,20 +81,29 @@ function empPDFHTML(e, r, opt, imgs) {
     if (v === '' || v == null) return '';
     if (f.t === 'date') return fmtDate(v);
     if (f.t === 'emp') return empName(v);
-    if (f.money) return `${fmtNum(v)} ${cur}`;
+    if (f.money) return num(v) ? `${fmtNum(v)} ${cur}` : "";
     return String(v);
   };
-  const SKIP = ['مسحوب من الشيتات التانية'];
-  const MONEYSEC = ['الراتب', 'السلف ونهاية الخدمة'];
-  const sec = ([title, fields]) => {
-    const rows = fields.filter(f => f.t !== 'photo' && (!f.show || f.show(r)) && val(f) !== '');
+  /* the file is grouped the way people read it, not the way the form is laid out */
+  const GROUPS = [
+    ['البيانات الشخصية', ['nameAr', 'nameEn', 'nationality', 'dob', 'marital', 'dependents', 'bloodType', 'idNumber', 'iqamaExpiry', 'iqamaProfession', 'iqamaEmployer', 'iqamaIssuePlace', 'passportNo', 'passportExpiry']],
+    ['التواصل والطوارئ', ['phone', 'companyEmail', 'personalEmail', 'city', 'emergencyName', 'emergencyRelation', 'emergencyPhone']],
+    ['الوظيفة والعقد', ['code', 'kind', 'jobTitle', 'department', 'manager', 'status', 'empType', 'country', 'workLocation', 'saudizationCompany', 'saudizationFee', 'joinDate', 'contractYears', 'contractEnd', 'probationEnd', 'serviceYears', 'lastDay', 'leaveDays']],
+    ['رخصة القيادة', ['licenseNo', 'licenseType', 'licenseIssue', 'licenseExpiry']],
+    ['التأمينات والتأمين الطبي', ['gosi', 'gosiAmount', 'medicalClass', 'medicalExpiry']],
+    ['الراتب والبنك', ['basic', 'housing', 'transport', 'cola', 'comms', 'other', 'total', 'advDeduction', 'net', 'currency', 'payMethod', 'bank', 'bankCode', 'iban', 'eos'], true],
+  ];
+  const SKIPK = ['photo', 'assignedCar', 'car', 'laptop', 'advRemaining'];
+  const used = new Set(GROUPS.flatMap(g => g[1]));
+  const rest = allFields('employees').filter(f => !used.has(f.k) && !SKIPK.includes(f.k)).map(f => f.k);
+  if (rest.length) GROUPS.push(['بيانات أخرى', rest]);
+  const sec = ([title, keys, money]) => {
+    if (money && !opt.salary) return '';
+    const rows = keys.map(k => fieldOf('employees', k)).filter(f => f && (!f.show || f.show(r)) && val(f) !== '');
     if (!rows.length) return '';
-    const cell = f => f ? `<th>${esc(f.l)}</th><td>${esc(val(f))}</td>` : '<th></th><td></td>';
-    let trs = '';
-    for (let n = 0; n < rows.length; n += 2) trs += `<tr>${cell(rows[n])}${cell(rows[n + 1])}</tr>`;
-    return `<section class="ep-sec"><h3>${esc(title)}</h3><table class="ep-kv">${trs}</table></section>`;
+    return `<section class="ep-sec"><h3>${esc(title)}</h3><div class="ep-kv">${rows.map(f => `<div class="kr"><span>${esc(f.l)}</span><b>${esc(val(f))}</b></div>`).join('')}</div></section>`;
   };
-  const secs = ENTITIES.employees.sections.filter(([t]) => !SKIP.includes(t) && (opt.salary || !MONEYSEC.includes(t)));
+  const secs = GROUPS;
   const svc = r.joinDate ? yearsSince(r.joinDate) : null;
   const li = leaveInfo(e);
   const y = todayStr().slice(0, 4);
@@ -110,7 +118,7 @@ function empPDFHTML(e, r, opt, imgs) {
   const logo = new URL('logo-wide.jpg', location.href).href;
 
   return `<div class="ep-page">
-    <header class="ep-head"><img src="${logo}" alt=""><div><h1>الملف الرقمي للموظف</h1><p>Employee digital file · اتطلع ${fmtDate(todayStr())}</p></div></header>
+    <header class="ep-head"><div><h1>الملف الرقمي للموظف</h1><p>تاريخ الإصدار: ${fmtDate(todayStr())}</p></div><img src="${logo}" alt=""></header>
     <div class="ep-strip"></div>
     <div class="ep-hero">
       <div class="ep-photo" ${e.photo ? `style="background-image:url('${esc(e.photo)}')"` : ''}>${e.photo ? '' : esc(initials(nameOf(e)))}</div>
@@ -126,8 +134,8 @@ function empPDFHTML(e, r, opt, imgs) {
     </div>
     ${docs.length ? `<section class="ep-sec"><h3>المستندات</h3><table class="ep-docs"><tr><th>المستند</th><th>الرقم / التفاصيل</th><th>تاريخ الانتهاء</th><th>الحالة</th></tr>${docs.map(d => { const [t, c] = docState(d[2]); return `<tr><td>${esc(d[0])}</td><td class="num">${esc(d[1] || '—')}</td><td>${d[2] ? fmtDate(d[2]) : '—'}</td><td><span class="ep-st ${c}">${t}</span></td></tr>`; }).join('')}</table></section>` : ''}
     ${secs.map(sec).join('')}
-    ${opt.cards ? `<div class="epdf-break"></div><section class="ep-sec ep-cards"><h3>الإقامة والرخصة</h3>
-      ${['iqama', 'license'].map(k => { const c = card(k); return c ? `<div class="ep-card"><div class="cap">${k === 'license' ? 'رخصة القيادة' : docTitle(e).ar}${imgs[k] ? ' · صورة الكارت الأصلية' : ' · من بيانات السيستم'}</div>${c}</div>` : ''; }).join('')}</section>` : ''}
+    ${opt.cards ? `<section class="ep-sec ep-cards"><h3>الإقامة والرخصة</h3><div class="ep-cardgrid">
+      ${['iqama', 'license'].map(k => { const c = card(k); return c ? `<div class="ep-card">${c}<div class="cap">${k === 'license' ? 'رخصة القيادة' : docTitle(e).ar} · ${imgs[k] ? 'صورة الكارت الأصلية' : 'من بيانات السيستم'}</div></div>` : ''; }).join('')}</div></section>` : ''}
     ${opt.att && att.length ? `<section class="ep-sec"><h3>ملخص الحضور ${y}</h3><table class="ep-att"><tr><th>الشهر</th><th>أيام الشغل</th><th>حضور</th><th>تأخير</th><th>إجازة</th><th>مرضي</th><th>غياب</th><th>النسبة</th></tr>
       ${att.map(([m, s]) => `<tr><td>${fmtMonth(m)}</td><td>${s.work}</td><td>${s.present}</td><td>${s.late}</td><td>${s.leave}</td><td>${s.sick}</td><td class="${s.absent ? 'bad' : ''}">${s.absent}</td><td><b>${s.rate != null ? s.rate + '%' : '—'}</b></td></tr>`).join('')}
       <tr class="tot"><td>الإجمالي</td><td>${tot.work}</td><td>${tot.present}</td><td>${tot.late}</td><td>${tot.leave}</td><td>${tot.sick}</td><td>${tot.absent}</td><td><b>${totRate != null ? totRate + '%' : '—'}</b></td></tr></table></section>` : ''}

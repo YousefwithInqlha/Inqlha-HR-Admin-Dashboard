@@ -363,12 +363,12 @@ function attCardHTML(e) {
   const valid = vals.filter(v => v != null);
   const avg = valid.length ? Math.round(valid.reduce((a, b) => a + b, 0) / valid.length) : null;
   const bars = months.map((x, i) => { const v = vals[i]; return `<button class="bar ${x === ym ? 'cur' : ''} ${v != null && v < 90 ? 'low' : ''}" data-month="${x}" title="${fmtMonth(x)}${v != null ? ': ' + v + '%' : ''}" ${v == null ? 'disabled' : ''}><b>${v != null ? v : ''}</b><i style="height:${v != null ? Math.max(4, (v - 50) / 50 * 100) : 0}%"></i></button>`; }).join('');
-  const lt = (c, l, v, sub) => `<div class="lg"><small><i style="background:${c}"></i>${l}</small><b class="num">${v}${sub ? ` <em>${sub}</em>` : ''}</b></div>`;
+  const lt = (c, l, v, sub) => `<div class="lg"><small><i style="background:${c}"></i>${l}</small><b><span class="num">${v}</span>${sub ? ` <em>${sub}</em>` : ''}</b></div>`;
   return `<section class="card pf-sec">
     <div class="pf-h"><h3>${icon('fingerprint')}الحضور</h3><span class="sp"></span>
       <button class="icon-btn sm" data-mnav="-1" aria-label="الشهر اللي فات">${icon('chevron-right')}</button><b class="pf-month">${MONTHS[m - 1]} ${y}</b><button class="icon-btn sm" data-mnav="1" aria-label="الشهر الجاي" ${ym >= todayStr().slice(0, 7) ? 'disabled' : ''}>${icon('chevron-left')}</button>
       <button class="btn sm" data-attadd>${icon('calendar-plus')}سجّل إجازة / غياب</button></div>
-    <div class="pf-legend">${lt('#0b6062', 'حضور', s.present, 'يوم')}${lt('#eda100', 'تأخير', s.late, s.lateMin ? s.lateMin + ' دقيقة' : '')}${lt('#2a78d6', 'إجازة', s.leave + s.sick, s.sick ? `منها ${s.sick} مرضي` : 'يوم')}${lt('#c93636', 'غياب', s.absent, 'يوم')}</div>
+    <div class="pf-legend">${lt('#0b6062', 'حضور', s.present, 'يوم')}${lt('#eda100', 'تأخير', s.late, s.lateMin ? 'يوم · ' + s.lateMin + ' دقيقة' : 'يوم')}${lt('#2a78d6', 'إجازة', s.leave + s.sick, s.sick ? `منها ${s.sick} مرضي` : 'يوم')}${lt('#c93636', 'غياب', s.absent, 'يوم')}</div>
     <div class="att">
       <div class="ring" style="background:conic-gradient(${ring})" role="img" aria-label="نسبة الحضور"><div class="h"><div><b class="num">${s.rate != null ? s.rate + '%' : '—'}</b><small>${s.rate != null ? 'نسبة الحضور' : 'مفيش أيام شغل'}</small></div></div></div>
       <div><div class="cal">${cal}</div><p class="att-hint">${icon('hand-click')}كل أيام الشغل بتتحسب حضور لوحدها. دوس على أي يوم عشان تسجل غياب أو تأخير أو إجازة.</p></div>
@@ -554,27 +554,28 @@ function renderProfile() {
   const ndCls = nd && nd[1] < 0 ? 'danger' : nd && nd[1] <= 60 ? 'warn' : '';
   const svc = r.joinDate ? yearsSince(r.joinDate) : null;
   const wa = waLink(r.phone);
-  const kpi = (ic, l, val, sub, cls = '') => `<div class="pf-kpi ${cls}"><span class="ic">${icon(ic)}</span><div><small>${l}</small><b class="num">${val}${sub ? `<em>${sub}</em>` : ''}</b></div></div>`;
+  const kpi = (ic, l, val, sub, cls = '') => `<div class="pf-kpi ${cls}"><span class="ic">${icon(ic)}</span><div><small>${l}</small><b><span class="num">${val}</span>${sub ? `<em>${sub}</em>` : ''}</b></div></div>`;
   const tabs = [['overview', 'layout-dashboard', 'نظرة عامة'], ['attendance', 'fingerprint', 'الحضور'], ['data', 'list-details', 'كل البيانات']];
 
   $('#page').innerHTML = `
     <div class="pf-crumbs"><a href="#employees">${icon('arrow-right')}الموظفين</a><span>/</span><span class="num">${esc(e.code)}</span><span class="sp"></span>
       ${n > 1 ? `<a class="icon-btn sm" href="#emp/${encodeURIComponent(prev.code)}" title="${esc(nameOf(prev))}" aria-label="الموظف اللي قبله">${icon('chevron-right')}</a><a class="icon-btn sm" href="#emp/${encodeURIComponent(next.code)}" title="${esc(nameOf(next))}" aria-label="الموظف اللي بعده">${icon('chevron-left')}</a>` : ''}</div>
     <section class="card pf-hero">
-      <div class="pf-band"></div>
-      <div class="pf-main">
-        <div class="pf-photo" ${e.photo ? `style="background-image:url('${esc(e.photo)}')"` : ''}>${e.photo ? '' : `<span>${esc(initials(nameOf(e)))}</span>`}<span class="st ${INACTIVE.includes(e.status) ? 'off' : e.status === 'إجازة طويلة' ? 'away' : ''}" title="${esc(e.status || '')}"></span></div>
-        <div class="pf-who">
-          <h1>${esc(nameOf(e))}</h1>${e.nameEn ? `<div class="en">${esc(e.nameEn.toUpperCase())}</div>` : ''}
-          <div class="tags">${e.status ? statusPill(e.status) : ''}<span class="pill plain brand">${icon(e.kind === 'سواق' ? 'steering-wheel' : 'user')}${esc(e.kind || 'موظف')}</span>${e.empType ? `<span class="pill plain info">${esc(e.empType)}</span>` : ''}<span class="pill plain num">${esc(e.code)}</span></div>
-          <div class="meta">${[['briefcase', e.jobTitle], ['sitemap', e.department], ['map-pin', [e.workLocation, e.country].filter(Boolean).join(' · ')], ['user-star', e.manager && 'المدير: ' + empName(e.manager)]].filter(x => x[1]).map(([ic, v]) => `<span>${icon(ic)}${esc(v)}</span>`).join('')}</div>
-        </div>
+      <div class="pf-band">
         <div class="pf-actions">
           ${wa ? `<a class="btn" href="${wa}" target="_blank" rel="noopener">${icon('brand-whatsapp')}واتساب</a>` : ''}
           ${r.phone ? `<a class="btn" href="tel:${esc(r.phone.replace(/\s/g, ''))}">${icon('phone')}اتصال</a>` : ''}
           <button class="btn" id="pf-pdf">${icon('file-type-pdf')}ملف PDF</button>
           <button class="btn primary" id="pf-edit">${icon('pencil')}تعديل</button>
-          <button class="icon-btn" id="pf-more" aria-label="خيارات">${icon('dots')}</button>
+          <button class="btn icon" id="pf-more" aria-label="خيارات">${icon('dots')}</button>
+        </div>
+      </div>
+      <div class="pf-main">
+        <div class="pf-photo" ${e.photo ? `style="background-image:url('${esc(e.photo)}')"` : ''}>${e.photo ? '' : `<span>${esc(initials(nameOf(e)))}</span>`}<span class="st ${INACTIVE.includes(e.status) ? 'off' : e.status === 'إجازة طويلة' ? 'away' : ''}" title="${esc(e.status || '')}"></span></div>
+        <div class="pf-who">
+          <h1>${esc(nameOf(e))}</h1>${e.nameEn ? `<div class="en">${esc(e.nameEn.toUpperCase())}</div>` : ''}
+          <div class="tags"><span class="pill plain code">${esc(e.code)}</span>${e.status ? statusPill(e.status) : ''}<span class="pill plain brand">${icon(e.kind === 'سواق' ? 'steering-wheel' : 'user')}${esc(e.kind || 'موظف')}</span>${e.empType ? `<span class="pill plain info">${esc(e.empType)}</span>` : ''}</div>
+          <div class="meta">${[['briefcase', e.jobTitle], ['sitemap', e.department], ['map-pin', [e.workLocation, e.country].filter(Boolean).join(' · ')], ['user-star', e.manager && 'المدير: ' + empName(e.manager)]].filter(x => x[1]).map(([ic, v]) => `<span>${icon(ic)}${esc(v)}</span>`).join('')}</div>
         </div>
       </div>
       <div class="pf-kpis">
