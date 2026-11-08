@@ -284,7 +284,8 @@ function docTitle(e) {
   return { ar: 'هوية مقيم', en: 'Resident Identity', pal: 'res' };
 }
 const slash = s => s ? s.replace(/-/g, '/') : '—';
-const maskId = v => !v ? '—' : DB.settings.showSensitive ? v : '••••••' + String(v).slice(-4);
+let PDF_FULL = false;
+const maskId = v => !v ? '—' : (DB.settings.showSensitive || PDF_FULL) ? v : '••••••' + String(v).slice(-4);
 const waLink = p => { let d = String(p || '').replace(/\D/g, ''); if (/^05\d{8}$/.test(d)) d = '966' + d.slice(1); else if (/^01\d{9}$/.test(d)) d = '20' + d.slice(1); else if (d.startsWith('00')) d = d.slice(2); return d ? `https://wa.me/${d}` : ''; };
 function expPill(date, days = 60) {
   if (!date) return `<span class="pill plain">${icon('calendar-question')}مفيش تاريخ انتهاء</span>`;
@@ -339,12 +340,12 @@ function walletSlotHTML(e, kind) {
   if (!has && !img) return `<div class="idc-wrap"><button class="idc-empty" data-upload="${kind}">${icon('license')}<b>مفيش رخصة قيادة متسجلة</b><small>ارفع صورة الرخصة أو ضيف بياناتها</small></button>
     <div class="idc-meta"><span class="sp"></span><button data-editf="${focus}">${icon('pencil')}ضيف البيانات</button></div></div>`;
   return `<div class="idc-wrap">
+    ${img ? `<div class="vt" role="tablist" aria-label="طريقة العرض"><button role="tab" aria-selected="${view === 'photo'}" class="${view === 'photo' ? 'on' : ''}" data-view="${kind}:photo">${icon('photo')}صورة الكارت</button><button role="tab" aria-selected="${view === 'data'}" class="${view === 'data' ? 'on' : ''}" data-view="${kind}:data">${icon('id')}من البيانات</button></div>` : `<div class="vt one"><button data-upload="${kind}">${icon('photo-up')}ارفع صورة الكارت الأصلية</button></div>`}
     ${view === 'photo' ? `<div class="idc photo ${DB.settings.showSensitive ? '' : 'hidden-doc'}" data-zoom="${kind}" data-img="${esc(img)}"><div class="ph-load">${icon('loader-2')}</div>${DB.settings.showSensitive ? '' : `<button class="reveal" data-reveal>${icon('eye')}إظهار</button>`}</div>`
       : `<div class="idc-click" data-zoom="${kind}">${idCardHTML(e, kind)}</div>`}
     <div class="idc-meta">${expPill(expDate, isLic ? 30 : 60)}<span class="sp"></span>
-      ${img ? `<div class="seg"><button class="${view === 'photo' ? 'on' : ''}" data-view="${kind}:photo">الصورة</button><button class="${view === 'data' ? 'on' : ''}" data-view="${kind}:data">البيانات</button></div>` : ''}
-      <button data-upload="${kind}" title="${img ? 'غيّر الصورة' : 'ارفع صورة الكارت'}">${icon(img ? 'replace' : 'photo-up')}${img ? '' : 'ارفع صورة'}</button>
-      <button data-editf="${focus}" title="عدّل البيانات">${icon('pencil')}</button>
+      ${img ? `<button data-upload="${kind}">${icon('replace')}غيّر الصورة</button>` : ''}
+      <button data-editf="${focus}">${icon('pencil')}عدّل</button>
     </div></div>`;
 }
 function attCardHTML(e) {
@@ -450,12 +451,80 @@ function timeline(e) {
   attOf(e.code).filter(a => a.type !== 'تأخير').sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3).forEach(a => ev.push({ d: a.date, t: a.type, cls: a.type === 'غياب' ? 'wr' : '' }));
   return ev.filter(x => x.d && x.d <= t).sort((a, b) => b.d.localeCompare(a.d));
 }
-function fullDataHTML(e, r) {
-  return ENTITIES.employees.sections.map(([title, fields]) => {
-    const vis = fields.filter(f => f.t !== 'photo' && (!f.show || f.show(r)) && r[f.k] !== '' && r[f.k] != null);
-    if (!vis.length) return '';
-    return `<section class="card pf-sec"><div class="pf-h"><h3>${icon(SECTION_ICONS[title] || 'point')}${esc(title)}</h3><span class="sp"></span><button class="link-btn" data-editf="${vis[0].k}">${icon('pencil')}تعديل</button></div><dl class="kv">${vis.map(f => `<div><dt>${fIcon(f)}${esc(f.l)}</dt><dd>${detailValue('employees', f, r)}</dd></div>`).join('')}</dl></section>`;
-  }).join('');
+/* ---------- "all data" tab: completeness, search, sections as readable tiles ---------- */
+const COPYABLE = ['idNumber', 'passportNo', 'phone', 'emergencyPhone', 'companyEmail', 'personalEmail', 'iban', 'licenseNo', 'code'];
+const isBlank = v => v === '' || v == null;
+function keyFieldsOf(r) {
+  const k = ['photo', 'nameAr', 'nameEn', 'nationality', 'dob', 'idNumber', 'phone', 'emergencyName', 'emergencyPhone', 'jobTitle', 'department', 'joinDate', 'empType', 'country', 'basic', 'payMethod', 'iban', 'bank'];
+  if (r.kind === 'سواق') k.push('licenseNo', 'licenseExpiry');
+  if (r.country === 'السعودية' && !/سعود/.test(r.nationality || '')) k.push('iqamaExpiry', 'passportNo');
+  return k;
+}
+const DT = { q: '', missingOnly: false };
+function dataSections(r) {
+  return ENTITIES.employees.sections.filter(([t]) => t !== 'مسحوب من الشيتات التانية')
+    .map(([title, fields]) => [title, fields.filter(f => f.t !== 'photo' && (!f.show || f.show(r)))]).filter(([, fs]) => fs.length);
+}
+Object.assign(FIELD_ICONS, { licenseType: 'certificate', licenseIssue: 'calendar-plus', iqamaProfession: 'briefcase', iqamaEmployer: 'building', iqamaIssuePlace: 'map-pin', bloodType: 'droplet', leaveDays: 'beach' });
+function fullDataHTML(e, r0) {
+  /* the driver's car lives on the car record; show its plate here */
+  const r = { ...r0, assignedCar: L.carOf(e.code).map(c => [c.plate, c.brand].filter(Boolean).join(' · ')).join('، ') };
+  const key = keyFieldsOf(r);
+  const missing = key.filter(k => isBlank(r[k]));
+  const pct = Math.round((key.length - missing.length) / key.length * 100);
+  const secs = dataSections(r);
+  const plain = f => { const v = r[f.k]; if (isBlank(v)) return ''; if (f.t === 'date') return fmtDate(v); if (f.t === 'emp') return empName(v); return String(v); };
+  const tile = f => {
+    const v = r[f.k], empty = isBlank(v);
+    const hidden = f.sens && !DB.settings.showSensitive;
+    const q = (f.l + ' ' + (hidden ? '' : plain(f))).toLowerCase();
+    return `<div class="dt-f ${empty ? 'blank' : ''} ${key.includes(f.k) && empty ? 'need' : ''}" data-q="${esc(q)}">
+      <span class="l">${fIcon(f)}${esc(f.l)}${f.calc ? `<i class="ti ti-calculator calc" title="بيتحسب لوحده" aria-hidden="true"></i>` : ''}</span>
+      <span class="v">${empty ? (f.calc ? '<span class="muted">—</span>' : `<button class="dt-add" data-editf="${f.k}">${icon('plus')}ضيف</button>`) : detailValue('employees', f, r)}</span>
+      ${!empty && !hidden && COPYABLE.includes(f.k) ? `<button class="dt-copy" data-copy="${esc(v)}" aria-label="نسخ ${esc(f.l)}" title="نسخ">${icon('copy')}</button>` : ''}
+    </div>`;
+  };
+  const nameOfKey = k => k === 'photo' ? 'صورة الموظف' : (fieldOf('employees', k) || {}).l || k;
+  return `<div class="dt">
+    <aside class="dt-nav card">
+      <div class="dt-score"><div class="dt-ring" style="--p:${pct}"><b class="num">${pct}%</b></div><div><b>اكتمال الملف</b><small>${missing.length ? `ناقص ${missing.length} من البيانات المهمة` : 'كل البيانات المهمة موجودة'}</small></div></div>
+      <nav>${secs.map(([t, fs], n) => { const filled = fs.filter(f => !isBlank(r[f.k])).length; return `<a href="#" data-goto-sec="${n}">${icon(SECTION_ICONS[t] || 'point')}<span>${esc(t)}</span><em class="${filled === fs.length ? 'full' : ''}">${filled}/${fs.length}</em></a>`; }).join('')}</nav>
+    </aside>
+    <div class="dt-main">
+      <div class="card dt-top">
+        <div class="dt-search">${icon('search')}<input class="input" id="dt-q" placeholder="دوّر في بيانات الموظف... مثلاً IBAN أو الجواز" value="${esc(DT.q)}" aria-label="دوّر في البيانات"></div>
+        <label class="dt-only"><input type="checkbox" id="dt-miss" ${DT.missingOnly ? 'checked' : ''}> الناقص بس</label>
+        <button class="btn sm" id="dt-copyall">${icon('clipboard-copy')}نسخ كل البيانات</button>
+      </div>
+      ${missing.length ? `<div class="dt-missing">${icon('alert-circle')}<span>البيانات المهمة الناقصة:</span>${missing.map(k => `<button class="chip-miss" data-editf="${k === 'photo' ? '' : k}">${esc(nameOfKey(k))}</button>`).join('')}</div>` : ''}
+      ${secs.map(([t, fs], n) => { const filled = fs.filter(f => !isBlank(r[f.k])).length; const firstEditable = (fs.find(f => !f.calc) || fs[0]).k; return `<section class="card dt-sec" id="dt-sec-${n}">
+        <header><span class="ic">${icon(SECTION_ICONS[t] || 'point')}</span><h3>${esc(t)}</h3><span class="cnt ${filled === fs.length ? 'full' : ''}">${filled} من ${fs.length}</span><span class="sp"></span><button class="btn sm ghost" data-editf="${firstEditable}">${icon('pencil')}تعديل</button></header>
+        <div class="dt-grid">${fs.map(tile).join('')}</div></section>`; }).join('')}
+      <div class="empty dt-none" hidden>${icon('search-off')}<b>مفيش حاجة بالاسم ده</b>جرّب كلمة تانية</div>
+    </div>
+  </div>`;
+}
+function bindDataTab(e, r) {
+  const page = $('#page');
+  const apply = () => {
+    const q = DT.q.trim().toLowerCase();
+    let any = 0;
+    $$('.dt-sec', page).forEach(sec => {
+      let n = 0;
+      $$('.dt-f', sec).forEach(t => { const ok = (!q || t.dataset.q.includes(q)) && (!DT.missingOnly || t.classList.contains('blank')); t.hidden = !ok; if (ok) n++; });
+      sec.hidden = !n; any += n;
+    });
+    $('.dt-none', page).hidden = !!any;
+  };
+  const qi = $('#dt-q', page);
+  if (qi) { qi.oninput = () => { DT.q = qi.value; apply(); }; $('#dt-miss', page).onchange = ev => { DT.missingOnly = ev.target.checked; apply(); }; apply(); }
+  $$('[data-goto-sec]', page).forEach(a => a.onclick = ev => { ev.preventDefault(); const s = $(`#dt-sec-${a.dataset.gotoSec}`); if (s) { s.scrollIntoView({ behavior: 'smooth', block: 'start' }); s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash'); } });
+  $$('[data-copy]', page).forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy).then(() => toast('اتنسخ')); });
+  const all = $('#dt-copyall', page);
+  if (all) all.onclick = () => {
+    const txt = dataSections(r).map(([t, fs]) => `${t}\n` + fs.filter(f => !isBlank(r[f.k]) && !(f.sens && !DB.settings.showSensitive)).map(f => `${f.l}: ${f.t === 'date' ? fmtDate(r[f.k]) : f.t === 'emp' ? empName(r[f.k]) : r[f.k]}`).join('\n')).join('\n\n');
+    navigator.clipboard.writeText(`${nameOf(e)} (${e.code})\n\n${txt}`).then(() => toast(DB.settings.showSensitive ? 'اتنسخت كل البيانات' : 'اتنسخت البيانات (من غير الحساسة)'));
+  };
 }
 function miniDocsHTML(e) {
   const d = (ic, bg, fg, t, sub, date, days) => `<div class="mdoc"><span class="ic" style="background:${bg};color:${fg}">${icon(ic)}</span><div><b>${t}</b><small>${sub}</small>${date ? `<div>${expPill(date, days)}</div>` : ''}</div></div>`;
@@ -503,6 +572,7 @@ function renderProfile() {
         <div class="pf-actions">
           ${wa ? `<a class="btn" href="${wa}" target="_blank" rel="noopener">${icon('brand-whatsapp')}واتساب</a>` : ''}
           ${r.phone ? `<a class="btn" href="tel:${esc(r.phone.replace(/\s/g, ''))}">${icon('phone')}اتصال</a>` : ''}
+          <button class="btn" id="pf-pdf">${icon('file-type-pdf')}ملف PDF</button>
           <button class="btn primary" id="pf-edit">${icon('pencil')}تعديل</button>
           <button class="icon-btn" id="pf-more" aria-label="خيارات">${icon('dots')}</button>
         </div>
@@ -517,7 +587,7 @@ function renderProfile() {
     </section>
     ${al.length ? `<div class="pf-alert ${al.some(a => a.cls === 'danger') ? 'danger' : ''}">${icon('alert-triangle')}<div>${al.map(a => `<div><b>${esc(a.field)}</b> ${a.txt} (${fmtDate(a.date)})</div>`).join('')}</div><button class="btn sm" data-editf="${(ENTITIES.employees.sections.flatMap(s => s[1]).find(f => f.l === al[0].field) || {}).k || ''}">${icon('refresh')}حدّث التاريخ</button></div>` : ''}
     <nav class="tabs pf-tabs">${tabs.map(([k, ic, l]) => `<button class="tab ${PF.tab === k ? 'active' : ''}" data-tab="${k}">${icon(ic)}${l}</button>`).join('')}</nav>
-    ${PF.tab === 'data' ? `<div class="pf-data">${fullDataHTML(e, r)}</div>` : `
+    ${PF.tab === 'data' ? fullDataHTML(e, r) : `
     <div class="pf-grid">
       <div class="pf-col">
         ${PF.tab === 'overview' ? `<section class="card pf-sec">
@@ -535,6 +605,8 @@ function renderProfile() {
 
 function bindProfile(e, i) {
   const page = $('#page');
+  $('#pf-pdf').onclick = () => openEmpPDF(e.code);
+  if (PF.tab === 'data') bindDataTab(e, withCalc('employees', e));
   $('#pf-edit').onclick = () => openForm('employees', i);
   $('#pf-more').onclick = ev => { ev.stopPropagation(); showMenu(ev.currentTarget, rowMenuItems('employees', i).filter(x => x.icon !== 'eye' && x.icon !== 'pencil')); };
   $$('[data-tab]', page).forEach(b => b.onclick = () => { PF.tab = b.dataset.tab; renderProfile(); });
