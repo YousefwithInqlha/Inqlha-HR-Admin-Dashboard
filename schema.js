@@ -88,6 +88,11 @@ function migrate(d) {
     if (!Array.isArray(b.invoices)) b.invoices = [];
     if (!Array.isArray(b.ibanCert)) b.ibanCert = [];
   });
+  /* cars: the year used to be typed inside the model ("كامري 2024") */
+  (d.cars || []).forEach(c => {
+    const m = String(c.model || '').match(/(?:^|\s)((?:19|20)\d{2})(?:\s|$)/);
+    if (m && !c.year) { c.year = +m[1]; c.model = String(c.model).replace(m[0], ' ').replace(/\s+/g, ' ').trim(); }
+  });
   d.settings = d.settings || {};
   if (!d.settings.accountant) d.settings.accountant = { name: '', phone: '', email: '' };
   return d;
@@ -264,7 +269,8 @@ const ENTITIES = {
         { k: 'plate', l: 'رقم السيارة', req: true, table: true },
         { k: 'city', l: 'المدينة', t: 'select', o: 'cities', table: true },
         { k: 'brand', l: 'الماركة', table: true },
-        { k: 'model', l: 'الموديل' },
+        { k: 'model', l: 'الموديل', help: 'مثال: كامري. الصورة بتتجاب بالماركة والموديل' },
+        { k: 'year', l: 'سنة الصنع', t: 'number' },
         { k: 'color', l: 'اللون' },
         { k: 'driver', l: 'مين اللي راكبها', t: 'emp', table: true },
       ]],
@@ -446,8 +452,8 @@ function sampleData() {
       { code: 'ADV-001', empCode: 'E-003', loanType: 'سلفة نقدية', date: shift(-60), amount: 3000, months: 6, paid: 1000 },
     ],
     cars: [
-      { contractNo: 'CAR-001', carType: 'ساطحة', plate: 'أ ب ج 1234', city: 'جدة', brand: 'إيسوزو', model: '2023', color: 'أبيض', driver: 'E-003', rentalOffice: 'مكتب تأجير تجريبي', price: 4500, payPeriod: 'شهري', nextPayment: shift(9), startDate: '2024-01-01', endDate: shift(200), status: 'ساري', regExpiry: shift(150), insuranceExpiry: shift(25) },
-      { contractNo: 'CAR-002', carType: 'ملاكي', plate: 'د هـ و 5678', city: 'الرياض', brand: 'تويوتا', model: 'كامري 2024', color: 'رمادي', driver: 'E-001', rentalOffice: 'مكتب تأجير تجريبي', price: 2800, payPeriod: 'شهري', nextPayment: shift(20), startDate: '2024-05-01', endDate: shift(300), status: 'ساري', regExpiry: shift(260), insuranceExpiry: shift(180) },
+      { contractNo: 'CAR-001', carType: 'ساطحة', plate: 'أ ب ج 1234', city: 'جدة', brand: 'إيسوزو', model: 'NPR', year: 2023, color: 'أبيض', driver: 'E-003', rentalOffice: 'مكتب تأجير تجريبي', price: 4500, payPeriod: 'شهري', nextPayment: shift(9), startDate: '2024-01-01', endDate: shift(200), status: 'ساري', regExpiry: shift(150), insuranceExpiry: shift(25) },
+      { contractNo: 'CAR-002', carType: 'ملاكي', plate: 'د هـ و 5678', city: 'الرياض', brand: 'تويوتا', model: 'كامري', year: 2024, color: 'رمادي', driver: 'E-001', rentalOffice: 'مكتب تأجير تجريبي', price: 2800, payPeriod: 'شهري', nextPayment: shift(20), startDate: '2024-05-01', endDate: shift(300), status: 'ساري', regExpiry: shift(260), insuranceExpiry: shift(180) },
     ],
     properties: [
       { contractNo: 'PR-001', propType: 'مكتب', city: 'الرياض', address: 'حي تجريبي، الرياض', landlord: 'مؤجر تجريبي 1', price: 12000, payPeriod: 'كل 6 شهور', nextPayment: shift(45), startDate: '2024-01-01', endDate: shift(50), status: 'ساري' },

@@ -103,7 +103,7 @@ const VIEW = {
   },
   cars: {
     icon: 'car', filters: ['carType', 'city', 'status'],
-    primary: r => ({ title: r.plate, sub: [r.carType, r.brand, r.model].filter(Boolean).join(' · '), icon: r.carType === 'ساطحة' ? 'truck' : 'car' }),
+    primary: r => ({ title: r.plate, sub: [r.carType, [r.brand, r.model, r.year].filter(Boolean).join(' ')].filter(Boolean).join(' · '), icon: r.carType === 'ساطحة' ? 'truck' : 'car' }),
     cols: ['primary', 'city', 'driver', 'price', 'nextPayment', 'status'],
     facts: r => [['الإيجار الشهري', fmtNum(r.price) + ' ر.س'], ['الدفعة الجاية', fmtDate(r.nextPayment) || '—'], ['السواق', r.driver ? empName(r.driver) : '—']],
     related: [{ ent: 'rentPayments', by: 'contractNo', title: 'دفعات الإيجار' }],
@@ -339,7 +339,7 @@ function renderList() {
   const E = ENTITIES[ent], V = VIEW[ent];
   const isEmp = ent === 'employees';
   const add = E.readonly ? '' : `<button class="btn accent" id="add">${icon('plus')}إضافة ${E.single}</button>`;
-  $('#page').innerHTML = pageHead(P.title, P.desc, `${payBtn}${isEmp ? `<button class="btn" id="fx-btn">${icon('forms')}بيانات من الموظفين</button><button class="btn" id="gf-imp">${icon('file-import')}استيراد من Google Form</button>` : ''}<button class="btn" id="xl">${icon('file-spreadsheet')}تصدير Excel</button>${add}`, P.icon) + tabsHTML(P, ent) + `
+  $('#page').innerHTML = pageHead(P.title, P.desc, `${payBtn}${isEmp ? `<button class="btn" id="fx-btn">${icon('forms')}بيانات من الموظفين</button><button class="btn" id="gf-imp">${icon('file-import')}استيراد من Google Form</button>` : ''}${SUM_ENTS.includes(ent) ? `<button class="btn" id="sum">${icon('file-type-pdf')}تحميل ملخص</button>` : ''}<button class="btn" id="xl">${icon('file-spreadsheet')}تصدير Excel</button>${add}`, P.icon) + tabsHTML(P, ent) + `
     <div class="toolbar">
       <div class="search-box">${icon('search')}<input class="input" id="q" placeholder="بحث في ${TAB_LABEL[ent]}..." value="${esc(UI.search)}"></div>
       ${(V.filters || []).map(k => { const f = fieldOf(ent, k); const cur = UI.filters[k] || ''; const opts = [...new Set([...options(f.o), ...DB[ent].map(r => r[k]).filter(Boolean)])];
@@ -350,6 +350,7 @@ function renderList() {
     </div>
     <div id="list-area"></div>`;
   $('#xl').onclick = () => exportExcel([ent]);
+  if ($('#sum')) $('#sum').onclick = () => openSummary(ent, UI.sumRows || []);
   if ($('#add')) $('#add').onclick = () => openForm(ent);
   if ($('#pr-new')) $('#pr-new').onclick = () => openPayroll();
   if ($('#pq-new')) $('#pq-new').onclick = () => openPayReqNew();
@@ -373,6 +374,7 @@ function renderList() {
       rows.sort((a, b) => { const x = key(a.r), y = key(b.r); return x !== '' && y !== '' && !isNaN(+x) && !isNaN(+y) ? (num(x) - num(y)) * dir : String(x ?? '').localeCompare(String(y ?? ''), 'ar') * dir; });
     }
     $('#count').textContent = `${rows.length} من ${DB[ent].length}`;
+    UI.sumRows = rows.map(x => x.r);
     const filtered = !!q || Object.values(UI.filters).some(Boolean);
     const bindMenus = () => $$('[data-menu]', area).forEach(b => b.onclick = e => { e.stopPropagation(); showMenu(b, rowMenuItems(ent, +b.dataset.menu)); });
 
@@ -466,6 +468,7 @@ function openDetail(ent, i) {
       ${parentIdx >= 0 ? `<button class="btn sm" id="dparent">${icon('arrow-up-left')}فتح ${esc(ENTITIES[parent[0]].single)}</button>` : ''}
       <span style="flex:1"></span><button class="btn sm danger" id="ddel">${icon('trash')}حذف</button></div>`}
     <div class="d-body">
+      ${ent === 'cars' ? carPhotoBoxHTML(DB.cars[i]) : ''}
       ${al.length ? `<div class="banner ${al.some(a => a.cls === 'danger') ? 'danger' : 'warn'}">${icon('alert-triangle')}<ul>${al.map(a => `<li><b>${esc(a.field)}:</b> ${a.txt} (${fmtDate(a.date)})</li>`).join('')}</ul></div>` : ''}
       ${V.facts ? `<div class="facts">${V.facts(r).map(([l, v]) => `<div class="fact"><small>${esc(l)}</small><b title="${esc(v)}">${esc(v || '—')}</b></div>`).join('')}</div>` : ''}
       ${related}${sections}
@@ -475,6 +478,7 @@ function openDetail(ent, i) {
   if ($('#ddel')) $('#ddel').onclick = () => { closeLayer(); removeRow(ent, i); };
   if ($('#dparent')) $('#dparent').onclick = () => openDetail(parent[0], parentIdx);
   $$('[data-quick]', panel).forEach(b => b.onclick = () => quick[+b.dataset.quick].run());
+  if (ent === 'cars') bindCarPhotoBox(panel, DB.cars[i]);
   $$('[data-open]', panel).forEach(el => el.onclick = () => { const [e2, j] = el.dataset.open.split(':'); openDetail(e2, +j); });
   $$('[data-rel-add]', panel).forEach(b => b.onclick = () => { const [e2, by] = b.dataset.relAdd.split(':'); const pre = { [by]: r[E.key] }; if (e2 === 'rentPayments') pre.amount = r.periodAmount; if (e2 === 'billPayments') pre.amount = r.amount; openForm(e2, null, pre); });
 }
@@ -655,6 +659,7 @@ if (phFile) {
     allFields(ent).forEach(f => { if (f.calc) delete vals[f.k]; });
     afterSave(ent, vals, editing ? DB[ent][idx] : null);
     let at = idx;
+    if (editing && ent === 'cars') CAR_KEEP.forEach(k => { if (DB.cars[idx][k] != null) vals[k] = DB.cars[idx][k]; });
     if (editing) DB[ent][idx] = vals; else { DB[ent].push(vals); at = DB[ent].length - 1; }
     save(); layerGuard = null; render();
     const msg = editing ? 'اتحفظت التعديلات' : `اتضاف ${E.single}`;

@@ -1023,3 +1023,16 @@ body.gated .app { visibility: hidden; }
 .f label.fup-add > .ti { font-size: 1.6rem; opacity: 1; color: var(--brand); margin: 0; }
 .f label.fup-add span { flex: 1; }
 .kv > div:has(.fup-list.view) { grid-column: 1 / -1; }
+
+/* ===== v14: car photo, summaries ===== */
+.car-photo { margin-bottom: 14px; }
+.cp-img { height: 190px; border-radius: 12px; background: #f3f7f7; border: 1px solid var(--line); overflow: hidden; display: grid; place-items: center; }
+.cp-img img { width: 100%; height: 100%; object-fit: cover; }
+.cp-empty { display: flex; align-items: center; gap: 8px; color: var(--ink-3, #6b8180); padding: 0 16px; text-align: center; }
+.cp-empty .ti-loader-2 { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.cp-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.cp-acts label.btn { cursor: pointer; }
+.cp-note { color: var(--ink-3, #6b8180); font-size: .8rem; }
+.sm-custom { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.sm-custom label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--ink-2); flex: 1; min-width: 140px; }
