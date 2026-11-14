@@ -523,6 +523,7 @@ function removeRow(ent, i) {
   toast(`اتحذف "${title}"`, 'تراجع', () => { DB[ent].splice(i, 0, row); save(); render(); toast('رجع تاني'); });
 }
 function toast(msg, actionLabel = '', action = null) {
+  if (FN.open) { FN.toast = [msg, actionLabel, action]; return; } /* "downloaded" waits until the name is confirmed */
   const t = $('#toast');
   $('span', t).textContent = msg;
   const b = $('button', t); b.textContent = actionLabel; b.onclick = () => { t.classList.remove('show'); action && action(); };
@@ -767,7 +768,7 @@ function missingData(e) {
   const method = e.payMethod || '';
   if (!method) m.push('طريقة الصرف');
   if (!e.iban) m.push('IBAN');
-  if ((method || (e.country === 'السعودية' ? 'مدد' : '')) === 'مدد' && !BANK_CODES[e.bank]) m.push('البنك');
+  if ((method || (e.country === 'السعودية' ? 'مدد' : '')) === 'مدد' && !bankCodeOf(e.bank, e.iban)) m.push('البنك');
   if (!e.idNumber) m.push('رقم الهوية');
   if (!num(e.basic)) m.push('الراتب الأساسي');
   return m;
@@ -973,7 +974,51 @@ function renderSettings() {
 }
 
 /* ---------------- export ---------------- */
-function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
+/* every file the system makes asks for its name first, with the usual name filled in */
+const FN = { open: false, toast: null };
+function askFileName(def) {
+  const m = String(def || 'INQLHA').match(/^(.*?)(\.[a-z0-9]{2,5})?$/i), base = m[1], ext = m[2] || '';
+  return new Promise(res => {
+    FN.open = true; FN.toast = null;
+    const ov = document.createElement('div');
+    ov.className = 'fn-ov';
+    ov.innerHTML = `<form class="fn-box" role="dialog" aria-modal="true" aria-labelledby="fn-t">
+      <h3 id="fn-t">${icon('file-download')}${tr('اسم الملف')}</h3>
+      <label class="fn-in"><input class="input" id="fn-name" dir="auto" autocomplete="off" spellcheck="false"><span class="fn-ext" dir="ltr">${esc(ext)}</span></label>
+      <small class="fn-help">${tr('عدّل الاسم لو حابب، أو احفظ بالاسم ده')}</small>
+      <div class="fn-act"><button type="submit" class="btn primary">${icon('download')}${tr('حفظ')}</button><button type="button" class="btn ghost" id="fn-x">${tr('إلغاء')}</button></div></form>`;
+    document.body.appendChild(ov);
+    const inp = ov.querySelector('#fn-name'); inp.value = base; inp.focus(); inp.select();
+    const done = ok => {
+      const n = inp.value.replace(/[\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim();
+      ov.remove(); FN.open = false;
+      const t = FN.toast; FN.toast = null;
+      res(ok ? (n || base) + ext : null);
+      if (ok && t) toast(...t);
+    };
+    ov.querySelector('form').onsubmit = e => { e.preventDefault(); done(true); };
+    ov.querySelector('#fn-x').onclick = () => done(false);
+    ov.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+    ov.onclick = e => { if (e.target === ov) done(false); };
+  });
+}
+async function download(blob, name) {
+  const n = await askFileName(name); if (!n) return;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = n; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+if (window.XLSX && XLSX.writeFile) {
+  const writeFile = XLSX.writeFile.bind(XLSX);
+  XLSX.writeFile = (wb, name, opts) => { askFileName(name).then(n => { if (n) writeFile(wb, n, opts); }); };
+}
+/* PDFs come from the print window: ask the name, then print with it as the title (Chrome names the PDF after the title) */
+async function printFrame(fr, def) {
+  const name = await askFileName(String(def || fr.contentDocument.title || 'INQLHA').replace(/\.pdf$/i, '') + '.pdf');
+  if (!name) { fr.remove(); return; }
+  const n = name.replace(/\.pdf$/i, ''), old = document.title;
+  fr.contentDocument.title = n; document.title = n;
+  try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { alert('مقدرتش أفتح الطباعة. جرّب من متصفح تاني.'); }
+  setTimeout(() => { document.title = old; }, 1500); setTimeout(() => fr.remove(), 60000);
+}
 function exportExcel(ents) {
   if (!window.XLSX) return alert('مكتبة Excel محتاجة نت عشان تشتغل. اتأكد إنك متصل وجرّب تاني.');
   const wb = XLSX.utils.book_new();

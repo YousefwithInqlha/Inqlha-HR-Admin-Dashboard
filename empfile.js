@@ -68,10 +68,7 @@ async function makeEmpPDF(e, opt) {
   const doc = fr.contentDocument;
   if (doc.fonts && doc.fonts.ready) await Promise.race([doc.fonts.ready, new Promise(res => setTimeout(res, 2500))]);
   await Promise.all([...doc.images].map(im => im.complete ? 0 : new Promise(res => { im.onload = im.onerror = res; })));
-  const oldTitle = document.title;
-  document.title = name; /* Chrome uses the top page's title as the file name */
-  try { fr.contentWindow.focus(); fr.contentWindow.print(); }
-  finally { setTimeout(() => { document.title = oldTitle; }, 1500); setTimeout(() => fr.remove(), 60000); }
+  await printFrame(fr, name);
 }
 
 function empPDFHTML(e, r, opt, imgs) {

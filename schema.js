@@ -34,6 +34,9 @@ const LIST_LABELS = {
 
 /* bank short codes used in the Mudad bank file, and English city names for its address column */
 const BANK_CODES = { 'مصرف الراجحي': 'RJHI', 'البنك الأهلي السعودي': 'NCBK', 'بنك الرياض': 'RIBL', 'مصرف الإنماء': 'INMA', 'بنك البلاد': 'ALBI', 'البنك السعودي الأول': 'SABB', 'البنك السعودي الفرنسي': 'BSFR', 'البنك العربي الوطني': 'ARNB', 'بنك الجزيرة': 'BJAZ', 'البنك السعودي للاستثمار': 'SIBC' };
+/* the bank's two digits inside a Saudi IBAN (SAkk BB...) */
+const IBAN_BANK = { '05': 'INMA', '10': 'NCBK', '15': 'ALBI', '20': 'RIBL', '30': 'ARNB', '40': 'NCBK', '45': 'SABB', '50': 'SABB', '55': 'BSFR', '60': 'BJAZ', '65': 'SIBC', '80': 'RJHI' };
+const bankCodeOf = (bank, iban) => BANK_CODES[bank] || BANK_CODES[String(bank || '').trim()] || (/^SA/i.test(String(iban || '').replace(/\s/g, '')) ? IBAN_BANK[String(iban).replace(/\s/g, '').slice(4, 6)] || '' : '');
 const CITY_EN = { 'الرياض': 'Riyadh', 'جدة': 'Jeddah', 'الدمام': 'Dammam', 'مكة': 'Makkah', 'المدينة': 'Madinah', 'الخبر': 'Khobar', 'القاهرة': 'Cairo', 'الإسكندرية': 'Alexandria' };
 
 /* ---------- fixed dropdowns ---------- */
@@ -228,7 +231,7 @@ const ENTITIES = {
         { k: 'payMethod', l: 'طريقة صرف الراتب', t: 'select', o: 'salaryPay', help: 'مدد = بيترفع في ملف البنك' },
         { k: 'iban', l: 'IBAN الراتب', sens: true, v: 'iban' },
         { k: 'bank', l: 'البنك', t: 'select', o: 'banks' },
-        { k: 'bankCode', l: 'كود البنك (مدد)', calc: r => BANK_CODES[r.bank] || '' },
+        { k: 'bankCode', l: 'كود البنك (مدد)', calc: r => bankCodeOf(r.bank, r.iban) },
       ]],
       ['السلف ونهاية الخدمة', [
         { k: 'advRemaining', l: 'المتبقي من السلف', money: true, sens: true, table: true, calc: r => round2(L.advancesOf(r.code).reduce((s, a) => s + advRemaining(a), 0)), help: 'من صفحة السلف' },

@@ -49,10 +49,18 @@ function buildLine(e, month) {
     basic: num(e.basic), housing: num(e.housing), transport: num(e.transport), cola: num(e.cola), other: num(e.other), telecom, overtime: 0,
     worked, attendance: round2(fixed * (30 - worked + absent) / 30), absent, loans, loanDed: round2(loans.reduce((s, x) => s + x.amount, 0)), otherDed: 0,
     note: notes.join(' + '), payMethod: e.payMethod || (e.country === 'السعودية' ? 'مدد' : 'تحويل'),
-    bank: e.bank || '', bankCode: BANK_CODES[e.bank] || '', iban: e.iban || '', idNumber: e.idNumber || '', city: CITY_EN[e.city] || e.city || '', include: true,
+    bank: e.bank || '', bankCode: bankCodeOf(e.bank, e.iban), iban: e.iban || '', idNumber: e.idNumber || '', city: CITY_EN[e.city] || e.city || '', include: true,
   };
 }
+/* name, ID and bank details always come from the employee record as it is now,
+   so data added to an employee after the payroll was started still reaches the Mudad file */
+function freshLine(l) {
+  const e = L.emp(l.empCode); if (!e) return l;
+  const iban = String(e.iban || l.iban || '').replace(/\s/g, '').toUpperCase(), bank = e.bank || l.bank || '';
+  return { ...l, name: e.nameAr || l.name, nameEn: e.nameEn || l.nameEn || '', nationality: e.nationality || l.nationality || '', bank, iban, bankCode: bankCodeOf(bank, iban), idNumber: e.idNumber || l.idNumber || '', city: CITY_EN[e.city] || e.city || l.city || '' };
+}
 function lineWarnings(l, cat) {
+  l = freshLine(l);
   const w = [];
   if (PR_CATS[cat].mudad && l.payMethod === 'مدد') {
     if (!l.iban) w.push('ناقص IBAN');
@@ -247,7 +255,7 @@ const r2 = n => round2(num(n));
 
 function mudadRows(run) {
   const head = ['Bank', 'Account Number', 'Total Salary', 'Transaction Refrence', 'Employee Name', 'National ID/Iqama ID', 'Employee Address', 'Basic Salary', 'Housing Allowance', 'Other Earnings', 'Deduction'];
-  const rows = runLines(run).filter(l => l.payMethod === 'مدد').map(l => [
+  const rows = runLines(run).filter(l => l.payMethod === 'مدد').map(freshLine).map(l => [
     l.bankCode, l.iban, r2(lineNet(l)), 'Salary', l.nationality === 'سعودي' || !l.nameEn ? l.name : l.nameEn, l.idNumber, l.city || 'Riyadh',
     r2(l.basic), r2(l.housing), r2(num(l.transport) + num(l.cola) + num(l.other) + num(l.overtime) + num(l.telecom)), r2(lineAllDed(l))]);
   return [head, ...rows];
@@ -255,6 +263,8 @@ function mudadRows(run) {
 function exportMudad(run, fmt) {
   const rows = mudadRows(run);
   if (rows.length < 2) return toast('مفيش موظفين بطريقة صرف "مدد" في الشهر ده');
+  const miss = runLines(run).filter(l => l.payMethod === 'مدد').map(freshLine).map(l => [l.name, [!l.bankCode && tr('البنك'), !l.iban && 'IBAN', !l.idNumber && tr('رقم الهوية')].filter(Boolean)]).filter(x => x[1].length);
+  if (miss.length && !confirm(`${tr('فيه بيانات ناقصة في ملف مدد')}:\n\n${miss.map(([n, f]) => `• ${n}: ${f.join('، ')}`).join('\n')}\n\n${tr('كمّلها من صفحة الموظف. تنزّل الملف كده برضه؟')}`)) return;
   const name = `Mudad ${fileBase(run)}`;
   if (fmt === 'csv') return download(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), name + '.csv'), toast('اتنزل ملف مدد CSV');
   if (!window.XLSX) return alert('مكتبة Excel محتاجة نت. جرّب CSV أو اتأكد من الاتصال.');
@@ -371,7 +381,7 @@ function printSummary(run) {
   const fr = document.createElement('iframe');
   fr.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.appendChild(fr);
-  fr.onload = () => { setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { alert('مقدرتش أفتح الطباعة. جرّب من متصفح تاني.'); } setTimeout(() => fr.remove(), 60000); }, 700); };
+  fr.onload = () => { setTimeout(() => { printFrame(fr); }, 700); };
   fr.srcdoc = html;
   toast('اختار "Save as PDF" من نافذة الطباعة');
 }

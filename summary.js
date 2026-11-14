@@ -100,7 +100,12 @@ function bindCarPhotoBox(panel, c) {
 
 /* ---------------- rental summaries: a popup picks Excel or PDF, the period and the columns ----------------
    Both files follow the payroll summary's design, and every cell is centered. */
-const SUM_ENTS = ['cars', 'properties', 'rentPayments'];
+const SUM_ENTS = ['employees', 'cars', 'properties', 'rentPayments'];
+/* salary amounts are in the employee's own currency; Saudization fees are always in riyals */
+const CUR_UNIT = { 'ريال': 'ر.س', 'جنيه': 'ج.م' };
+const empCur = r => r.currency || 'ريال';
+/* who goes into the employees summary: picked in the popup, prefilled from the page's filters */
+const EMP_SUM_FILTERS = ['empType', 'saudizationCompany', 'status', 'country', 'workLocation', 'department', 'manager', 'nationality'];
 const money2 = n => num(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 function residentsText(s, lang = LANG) {
   return String(s || '').split(/[\n،,]+/).map(x => x.trim()).filter(Boolean).map(x => { const e = L.emp(x); return e ? `${nameIn(lang, e)} (${x})` : x; }).join(lang === 'en' ? ', ' : '، ');
@@ -159,6 +164,37 @@ const SUM_COLS = {
     { k: 'endDate', l: 'نهاية العقد', on: true, date: true },
     { k: 'status', l: 'حالة العقد', on: true },
   ],
+  employees: [
+    { k: 'code', l: 'كود الموظف', on: true },
+    { k: 'nameAr', l: 'الاسم بالعربي', on: true },
+    { k: 'nameEn', l: 'الاسم بالإنجليزي' },
+    { k: 'nationality', l: 'الجنسية' },
+    { k: 'idNumber', l: 'رقم الهوية / الإقامة' },
+    { k: 'iqamaExpiry', l: 'انتهاء الإقامة', date: true },
+    { k: 'jobTitle', l: 'المسمى الوظيفي', on: true },
+    { k: 'department', l: 'القسم' },
+    { k: 'manager', l: 'المدير المباشر', v: r => r.manager ? (nameIn('ar', L.emp(r.manager)) || r.manager) : '' },
+    { k: 'empType', l: 'نوع التوظيف', on: true },
+    { k: 'saudizationCompany', l: 'شركة السعودة', on: true },
+    { k: 'workLocation', l: 'مكان الدوام' },
+    { k: 'city', l: 'المدينة' },
+    { k: 'joinDate', l: 'تاريخ الانضمام', date: true },
+    { k: 'status', l: 'حالة الموظف', on: true },
+    { k: 'basic', l: 'الراتب الأساسي', on: true, money: true, cur: true },
+    { k: 'housing', l: 'بدل سكن', money: true, cur: true },
+    { k: 'transport', l: 'بدل تنقلات', money: true, cur: true },
+    { k: 'cola', l: 'بدل غلاء معيشة', money: true, cur: true },
+    { k: 'comms', l: 'بدل اتصالات', money: true, cur: true },
+    { k: 'other', l: 'بدلات أخرى', money: true, cur: true },
+    { k: 'total', l: 'إجمالي الراتب', money: true, cur: true },
+    { k: 'saudizationFee', l: 'رسوم السعودة الشهرية', on: true, money: true, v: r => r.empType === 'سعودة' ? r.saudizationFee : '' },
+    { k: 'gosiAmount', l: 'اشتراك التأمينات', money: true, v: r => r.gosi === 'نعم' ? r.gosiAmount : '' },
+    { k: 'currency', l: 'عملة الراتب' },
+    { k: 'payMethod', l: 'طريقة الصرف' },
+    { k: 'bank', l: 'البنك' },
+    { k: 'iban', l: 'IBAN' },
+    { k: 'phone', l: 'الموبايل' },
+  ],
   rentPayments: [
     { k: 'code', l: 'رقم الدفعة' },
     { k: 'contract', l: 'العقد', on: true, v: (r, lang) => { const car = DB.cars.find(x => x.contractNo === r.contractNo); return lang === 'en' && car ? `Car ${car.plate}` : contractLabel(r.contractNo); } },
@@ -172,11 +208,13 @@ const SUM_COLS = {
     { k: 'notes', l: 'ملاحظات' },
   ],
 };
-const SUM_TITLE = { cars: 'ملخص إيجارات السيارات', properties: 'ملخص إيجارات السكن والمكاتب', rentPayments: 'ملخص دفعات الإيجار' };
-const SUM_FILE = { cars: 'Car rentals summary', properties: 'Housing & offices rent summary', rentPayments: 'Rent payments summary' };
+const SUM_TITLE = { employees: 'ملخص الموظفين', cars: 'ملخص إيجارات السيارات', properties: 'ملخص إيجارات السكن والمكاتب', rentPayments: 'ملخص دفعات الإيجار' };
+const SUM_FILE = { employees: 'Employees summary', cars: 'Car rentals summary', properties: 'Housing & offices rent summary', rentPayments: 'Rent payments summary' };
 /* the file can be in Arabic or English whatever language the screen is in */
 const fileTr = (lang, s) => { if (lang !== 'en' || s == null) return s; s = String(s); if (!AR.test(s)) return s; const lead = s.match(/^\s*/)[0], trail = s.match(/\s*$/)[0]; return lead + trCore(s.trim()) + trail; };
 const nameIn = (lang, e) => (e && ((lang === 'en' && e.nameEn) || e.nameAr)) || '';
+const SUM_OK = ['ساري', 'على رأس العمل'];
+const unitOf = (c, o) => c.cur ? (o.mixed ? '' : o.curUnit || 'ر.س') : 'ر.س';
 const sumVal = (c, r, lang = LANG) => { const v = c.v ? c.v(r, lang) : r[c.k]; return v == null ? '' : v; };
 
 /* the last choices are remembered per page, in this browser only */
@@ -191,6 +229,12 @@ function sumStats(ent, rows, lang = LANG) {
     const total = rows.reduce((s, r) => s + num(r.amount), 0), cars = rows.filter(isCarPay).reduce((s, r) => s + num(r.amount), 0);
     return [['عدد الدفعات', rows.length], ['دفعات السيارات', `${money2(cars)} ${R}`], ['دفعات السكن والمكاتب', `${money2(total - cars)} ${R}`], ['الإجمالي', `${money2(total)} ${R}`, 1]];
   }
+  if (ent === 'employees') {
+    const curs = [...new Set(rows.map(empCur))];
+    const per = k => curs.map(c => `${money2(rows.filter(r => empCur(r) === c).reduce((s, r) => s + num(r[k]), 0))} ${fileTr(lang, CUR_UNIT[c] || c)}`).join(' + ');
+    const fee = rows.filter(r => r.empType === 'سعودة').reduce((s, r) => s + num(r.saudizationFee), 0);
+    return [['عدد الموظفين', rows.length], ['إجمالي الأساسي', per('basic')], ['رسوم السعودة الشهرية', `${money2(fee)} ${R}`], ['إجمالي الرواتب', per('total'), 1]];
+  }
   const monthly = rows.reduce((s, r) => s + num(r.price), 0);
   const next = rows.map(r => r.nextPayment).filter(Boolean).sort()[0];
   const late = rows.filter(r => r.nextPayment && daysUntil(r.nextPayment) < 0).length;
@@ -198,8 +242,14 @@ function sumStats(ent, rows, lang = LANG) {
 }
 
 function openSummary(ent, rows) {
+  const isEmp = ent === 'employees';
+  if (isEmp) rows = DB.employees; /* the popup's own filters decide who goes in */
   if (!rows.length) return toast('مفيش حاجة في القايمة تطلع في الملخص');
   rows = rows.map(r => withCalc(ent, r));
+  const flt = {};
+  if (isEmp) EMP_SUM_FILTERS.forEach(k => { if (UI.filters && UI.filters[k]) flt[k] = UI.filters[k]; });
+  const fOpts = k => { const f = fieldOf('employees', k); const vals = [...new Set([...(f.o ? options(f.o) : []), ...rows.map(r => r[k]).filter(Boolean)])]; return k === 'manager' ? vals.filter(v => L.emp(v)).map(v => [v, nameIn('ar', L.emp(v))]) : vals.map(v => [v, v]); };
+  const filtered = () => rows.filter(r => Object.entries(flt).every(([k, v]) => !v || r[k] === v));
   const cols = SUM_COLS[ent], pref = sumPrefs(ent) || {};
   const picked = new Set(pref.cols || cols.filter(c => c.on).map(c => c.k));
   const st = { fmt: pref.fmt || 'pdf', lang: pref.lang || LANG, range: '0', sign: pref.sign !== false };
@@ -207,7 +257,7 @@ function openSummary(ent, rows) {
   const t = todayStr(), y = t.slice(0, 4), m = t.slice(0, 7);
   const ranges = [['الشهر ده', m + '-01', t], ['آخر 3 شهور', addMonths(t, -3), t], ['السنة دي', y + '-01-01', t], ['كل الدفعات', '', '']];
 
-  const panel = openLayer(`<div class="d-head"><span class="avatar lg sq">${icon('file-download')}</span><div class="t"><h2>${SUM_TITLE[ent]}</h2><p>${isPay ? 'الدفعات' : 'العقود'} اللي ظاهرة في القايمة دلوقتي <b class="num">${rows.length}</b></p></div><button class="icon-btn" id="sm-x" aria-label="إغلاق">${icon('x')}</button></div>
+  const panel = openLayer(`<div class="d-head"><span class="avatar lg sq">${icon('file-download')}</span><div class="t"><h2>${SUM_TITLE[ent]}</h2><p>${isEmp ? 'الموظفين اللي هيطلعوا في الملف' : isPay ? 'الدفعات اللي ظاهرة في القايمة دلوقتي' : 'العقود اللي ظاهرة في القايمة دلوقتي'} <b class="num" id="sm-n">${rows.length}</b></p></div><button class="icon-btn" id="sm-x" aria-label="إغلاق">${icon('x')}</button></div>
     <div class="d-body sm-body">
       <section class="sm-sec"><h4>${icon('file-export')}الصيغة</h4>
         <div class="fmt sm-fmt">
@@ -216,13 +266,15 @@ function openSummary(ent, rows) {
         </div></section>
       <section class="sm-sec"><h4>${icon('language')}لغة الملف</h4>
         <div class="choice-row" id="sm-lang"><button type="button" class="choice-pill" data-lang="ar">عربي</button><button type="button" class="choice-pill" data-lang="en">English</button></div></section>
+      ${isEmp ? `<section class="sm-sec"><h4>${icon('filter')}مين يطلع في الملف <span class="sm-links"><button type="button" class="link-btn" id="sm-fclear">كل الموظفين</button></span></h4>
+        <div class="sm-filters">${EMP_SUM_FILTERS.map(k => `<label><span>${fieldOf('employees', k).l}</span><select class="select" data-sf="${k}"><option value="">الكل</option>${fOpts(k).map(([v, l]) => `<option value="${esc(v)}" ${flt[k] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`).join('')}</div></section>` : ''}
       ${isPay ? `<section class="sm-sec"><h4>${icon('calendar')}الفترة</h4>
         <div class="choice-row" id="sm-r">${ranges.map((r, i) => `<button type="button" class="choice-pill ${i === 0 ? 'on' : ''}" data-i="${i}">${r[0]}</button>`).join('')}<button type="button" class="choice-pill" data-i="c">من تاريخ لتاريخ</button></div>
         <div class="sm-custom" id="sm-c" hidden><label>من<input type="date" class="input" id="sm-from" value="${m}-01"></label><label>إلى<input type="date" class="input" id="sm-to" value="${t}"></label></div></section>` : ''}
       <section class="sm-sec"><h4>${icon('list-check')}البيانات اللي تطلع في الملف <span class="sm-links"><button type="button" class="link-btn" id="sm-all">الكل</button><button type="button" class="link-btn" id="sm-def">الأساسي</button></span></h4>
         <div class="sm-cols" id="sm-cols">${cols.map(c => `<label class="sm-col ${c.pdf ? 'pdf-only' : ''}"><input type="checkbox" value="${c.k}" ${picked.has(c.k) ? 'checked' : ''}><span>${c.l}</span>${c.pdf ? `<small>PDF بس</small>` : ''}</label>`).join('')}</div></section>
       <section class="sm-sec"><h4>${icon('adjustments')}إضافات</h4>
-        <label class="sm-col sm-wide"><input type="checkbox" id="sm-sign" ${st.sign ? 'checked' : ''}><span>خانات التوقيع في الآخر (أعدّه · مدير الموارد البشرية · اعتمده)</span></label>
+        <label class="sm-col sm-wide pdf-only"><input type="checkbox" id="sm-sign" ${st.sign ? 'checked' : ''}><span>خانات التوقيع في الآخر (أعدّه · مدير الموارد البشرية · اعتمده)</span><small>PDF بس</small></label>
         <label class="sm-note">ملاحظة تظهر في الملف (اختياري)<textarea class="input" id="sm-note" rows="2" placeholder="مثال: ملخص لطلب تجديد العقود"></textarea></label></section>
     </div>
     <div class="d-foot"><button class="btn primary" id="sm-go">${icon('download')}<span id="sm-go-t"></span></button><button class="btn ghost" id="sm-cancel">إلغاء</button><span class="note" id="sm-count"></span></div>`, 'modal');
@@ -235,8 +287,13 @@ function openSummary(ent, rows) {
     $('#sm-go-t', panel).textContent = tr(st.fmt === 'pdf' ? 'تحميل PDF' : 'تحميل Excel');
     const n = boxes().filter(b => b.checked && !(st.fmt === 'xlsx' && cols.find(c => c.k === b.value).pdf)).length;
     $('#sm-count', panel).textContent = `${n} ${tr('خانة')}`;
-    $('#sm-go', panel).disabled = !n;
+    const cnt = isEmp ? filtered().length : rows.length;
+    $('#sm-n', panel).textContent = cnt;
+    $('#sm-go', panel).disabled = !n || !cnt;
   };
+  $$('[data-sf]', panel).forEach(x => x.onchange = () => { flt[x.dataset.sf] = x.value; x.classList.toggle('set', !!x.value); sync(); });
+  $$('[data-sf]', panel).forEach(x => x.classList.toggle('set', !!x.value));
+  if (isEmp) $('#sm-fclear', panel).onclick = () => { $$('[data-sf]', panel).forEach(x => { x.value = ''; x.classList.remove('set'); flt[x.dataset.sf] = ''; }); sync(); };
   $$('[data-fmt]', panel).forEach(b => b.onclick = () => { st.fmt = b.dataset.fmt; sync(); });
   $$('[data-lang]', panel).forEach(b => b.onclick = () => { st.lang = b.dataset.lang; sync(); });
   boxes().forEach(b => b.onchange = sync);
@@ -248,15 +305,25 @@ function openSummary(ent, rows) {
 
   $('#sm-go', panel).onclick = () => {
     const keys = boxes().filter(b => b.checked).map(b => b.value);
-    const use = cols.filter(c => keys.includes(c.k) && !(st.fmt === 'xlsx' && c.pdf));
-    let sel = rows, rangeLabel = '';
+    let use = cols.filter(c => keys.includes(c.k) && !(st.fmt === 'xlsx' && c.pdf));
+    let sel = isEmp ? filtered() : rows, rangeLabel = '';
+    const extra = {};
+    if (isEmp) {
+      if (!sel.length) return toast('مفيش موظفين بالفلتر ده');
+      /* filters say what the file is about, e.g. "سعودة · شركة سعودة (أ)" */
+      rangeLabel = EMP_SUM_FILTERS.filter(k => flt[k]).map(k => k === 'manager' ? nameIn('ar', L.emp(flt[k])) : flt[k]).join(' · ');
+      const curs = [...new Set(sel.map(empCur))];
+      extra.rangeTitle = 'الفلتر'; extra.mixed = curs.length > 1; extra.curUnit = CUR_UNIT[curs[0]] || curs[0];
+      /* different currencies: show which one each salary is in, and don't add them up */
+      if (extra.mixed && use.some(c => c.cur) && !use.some(c => c.k === 'currency')) { const i = use.findIndex(c => c.cur); use = [...use.slice(0, i), cols.find(c => c.k === 'currency'), ...use.slice(i)]; }
+    }
     if (isPay) {
       const [label, from, to] = st.range === 'c' ? ['', $('#sm-from', panel).value, $('#sm-to', panel).value] : ranges[+st.range];
       sel = rows.filter(r => (!from || (r.payDate || '') >= from) && (!to || (r.payDate || '') <= to)).sort((a, b) => String(a.payDate).localeCompare(String(b.payDate)));
       if (!sel.length) return toast('مفيش دفعات في الفترة دي');
       rangeLabel = label ? fileTr(st.lang, label) : `${from || '…'} → ${to || '…'}`;
     }
-    const opts = { cols: use, lang: st.lang, sign: $('#sm-sign', panel).checked, note: $('#sm-note', panel).value.trim(), rangeLabel };
+    const opts = { cols: use, lang: st.lang, sign: $('#sm-sign', panel).checked, note: $('#sm-note', panel).value.trim(), rangeLabel, ...extra };
     sumSavePrefs(ent, { fmt: st.fmt, lang: st.lang, cols: keys, sign: opts.sign });
     closeLayer();
     if (st.fmt === 'xlsx') rentSummaryXlsx(ent, sel, opts); else rentSummaryPDF(ent, sel, opts);
@@ -267,12 +334,12 @@ function openSummary(ent, rows) {
 function rentSummaryXlsx(ent, rows, o) {
   if (!window.XLSX) return alert('مكتبة Excel محتاجة نت. جرّب PDF أو اتأكد من الاتصال.');
   const en = o.lang === 'en', cols = o.cols, W = cols.length + 1, tr = s => fileTr(o.lang, s);
-  const cell = (c, r) => { const v = sumVal(c, r, o.lang); return c.money ? round2(num(v)) : c.tv ? tr(v) : v; };
+  const cell = (c, r) => { const v = sumVal(c, r, o.lang); return c.money ? (v === '' ? '' : round2(num(v))) : c.tv ? tr(v) : v; };
   const head = ['#', ...cols.map(c => tr(c.l))];
   const body = rows.map((r, i) => [i + 1, ...cols.map(c => cell(c, r))]);
-  const totalRow = [tr('الإجمالي'), ...cols.map(c => c.money ? round2(rows.reduce((s, r) => s + num(sumVal(c, r, o.lang)), 0)) : '')];
+  const totalRow = [tr('الإجمالي'), ...cols.map(c => c.money && !(o.mixed && c.cur) ? round2(rows.reduce((s, r) => s + num(sumVal(c, r, o.lang)), 0)) : '')];
   const hasMoney = cols.some(c => c.money);
-  const meta = [`${tr('التاريخ')}: ${todayStr()}`, o.rangeLabel && `${tr('الفترة')}: ${o.rangeLabel}`, `${tr('العدد')}: ${rows.length}`].filter(Boolean).join('   ·   ');
+  const meta = [`${tr('التاريخ')}: ${todayStr()}`, o.rangeLabel && `${tr(o.rangeTitle || 'الفترة')}: ${o.rangeLabel}`, `${tr('العدد')}: ${rows.length}`].filter(Boolean).join('   ·   ');
   const stats = sumStats(ent, rows, o.lang);
 
   const aoa = [[`INQLHA · ${tr(SUM_TITLE[ent])}`], [meta]];
@@ -283,8 +350,6 @@ function rentSummaryXlsx(ent, rows, o) {
   if (hasMoney) { totR = aoa.length; aoa.push(totalRow); }
   aoa.push([]);
   const statR = aoa.length; stats.forEach(([l, v]) => aoa.push([tr(l), '', v]));
-  if (o.sign) { aoa.push([], []); aoa.push([tr('أعدّه'), '', tr('مدير الموارد البشرية'), '', tr('اعتمده')]); }
-  const signR = o.sign ? aoa.length - 1 : -1;
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const span = (r, c1, c2) => ({ s: { r, c: c1 }, e: { r, c: c2 } });
@@ -305,14 +370,13 @@ function rentSummaryXlsx(ent, rows, o) {
     set(H, c, { fill: { fgColor: { rgb: '014546' } }, font: font({ bold: true, color: { rgb: 'FFFFFF' }, sz: 10.5 }), border: { ...border, top: { style: 'thin', color: { rgb: '0B6062' } }, bottom: { style: 'thin', color: { rgb: '0B6062' } } } });
     for (let r = H + 1; r <= last; r++) {
       const row = rows[r - H - 1], v = col.k ? sumVal(col, row, o.lang) : '';
-      const late = col.k === 'nextPayment' && v && daysUntil(v) < 0, off = col.k === 'status' && v && v !== 'ساري';
+      const late = col.k === 'nextPayment' && v && daysUntil(v) < 0, off = col.k === 'status' && v && !SUM_OK.includes(v);
       set(r, c, { font: font({ bold: !!col.money, color: { rgb: late || off ? 'A32020' : '0E2423' } }), border, numFmt: col.money ? '#,##0.00' : undefined,
         fill: { fgColor: { rgb: late || off ? 'FDE3E3' : col.money ? 'E9F9EF' : (r - H) % 2 ? 'FFFFFF' : 'F6FAF9' } } });
     }
     if (totR > 0) set(totR, c, { font: font({ bold: true, color: { rgb: '014546' } }), border, numFmt: '#,##0.00', fill: { fgColor: { rgb: 'D5E8E7' } } });
   }
   stats.forEach(([, , hl], i) => { const r = statR + i; for (let c = 0; c <= Math.max(3, Math.min(W - 1, 4)); c++) set(r, c, { border, font: font({ bold: c >= 2 || !!hl, color: { rgb: c >= 2 ? '014546' : '0E2423' } }), fill: { fgColor: { rgb: hl ? 'D5E8E7' : 'ECF5F4' } } }); });
-  if (signR > 0) [0, 2, 4].forEach(c => set(signR, c, { font: font({ color: { rgb: '5F7674' } }), border: { top: { style: 'thin', color: { rgb: '9FB3B1' } } } }));
 
   /* width from the longest value in each column */
   const len = v => String(v ?? '').length;
@@ -342,14 +406,14 @@ async function rentSummaryPDF(ent, rows, o) {
     if (v === '' || v == null) return '<td class="mut">—</td>';
     if (c.money) return `<td class="amt"><span class="num">${money2(v)}</span></td>`;
     if (c.date) return `<td><span class="num">${esc(v)}</span>${c.k === 'nextPayment' ? dueTag(v, T, en) : ''}</td>`;
-    if (c.k === 'status') return `<td><i class="tag ${v === 'ساري' ? 'ok' : 'bad'}" dir="auto">${esc(v)}</i></td>`;
+    if (c.k === 'status') return `<td><i class="tag ${SUM_OK.includes(v) ? 'ok' : 'bad'}" dir="auto">${esc(v)}</i></td>`;
     if (c.k === 'plate') return `<td><span class="plate">${esc(v)}</span></td>`;
     if (/Iban/.test(c.k) || c.k === 'contractNo' || c.k === 'code') return `<td><span class="num">${esc(v)}</span></td>`;
     if (c.k === 'car' || c.k === 'contract') return `<td><b dir="auto">${esc(v)}</b></td>`;
     return `<td class="${c.k === 'residents' || c.k === 'address' || c.k === 'notes' ? 'wrap' : ''}"><span dir="auto">${c.tv ? T(v) : esc(v)}</span></td>`;
   };
   const money = cols.filter(c => c.money);
-  const foot = money.length ? `<tfoot><tr><td>${T('الإجمالي')}</td>${cols.map(c => c.money ? `<td><span class="num">${money2(rows.reduce((s, r) => s + num(sumVal(c, r, o.lang)), 0))}</span>${R}</td>` : '<td></td>').join('')}</tr></tfoot>` : '';
+  const foot = money.length ? `<tfoot><tr><td>${T('الإجمالي')}</td>${cols.map(c => c.money && !(o.mixed && c.cur) ? `<td><span class="num">${money2(rows.reduce((s, r) => s + num(sumVal(c, r, o.lang)), 0))}</span> ${T(unitOf(c, o))}</td>` : '<td></td>').join('')}</tr></tfoot>` : '';
   const stats = sumStats(ent, rows, o.lang);
 
   const html = `<!DOCTYPE html><html lang="${en ? 'en' : 'ar'}" dir="${en ? 'ltr' : 'rtl'}"><head><meta charset="utf-8"><title>INQLHA - ${en ? SUM_FILE[ent] : SUM_TITLE[ent]} - ${todayStr()}</title>
@@ -388,10 +452,10 @@ async function rentSummaryPDF(ent, rows, o) {
     .sign div { width: 180px; border-top: 1px solid #9fb3b1; padding-top: 4px; color: #6b8381; }
     footer { margin-top: 14px; color: #8aa09e; font-size: 8.5px; }
   </style></head><body>
-  <header><img src="${logo}" alt="INQLHA"><h1>${T(SUM_TITLE[ent])}</h1><p>${T('التاريخ')}: <span class="num">${todayStr()}</span>${o.rangeLabel ? ` · ${T('الفترة')}: ${esc(o.rangeLabel)}` : ''} · ${T('العدد')}: ${rows.length}</p></header><div class="strip"></div>
+  <header><img src="${logo}" alt="INQLHA"><h1>${T(SUM_TITLE[ent])}</h1><p>${T('التاريخ')}: <span class="num">${todayStr()}</span>${o.rangeLabel ? ` · ${T(o.rangeTitle || 'الفترة')}: ${esc(o.rangeLabel)}` : ''} · ${T('العدد')}: ${rows.length}</p></header><div class="strip"></div>
   ${o.note ? `<div class="note">${esc(o.note)}</div>` : ''}
   <div class="kpis">${stats.map(([l, v, hl]) => `<div class="kpi ${hl ? 'hl' : ''}"><small>${T(l)}</small><b>${esc(v)}</b></div>`).join('')}</div>
-  <table><thead><tr><th>#</th>${cols.map(c => `<th>${T(c.l)}${c.money ? `<br><small>(${T('ر.س')})</small>` : ''}</th>`).join('')}</tr></thead>
+  <table><thead><tr><th>#</th>${cols.map(c => `<th>${T(c.l)}${c.money && unitOf(c, o) ? `<br><small>(${T(unitOf(c, o))})</small>` : ''}</th>`).join('')}</tr></thead>
   <tbody>${rows.map((r, n) => `<tr><td>${n + 1}</td>${cols.map(c => td(c, r, n)).join('')}</tr>`).join('')}</tbody>${foot}</table>
   ${o.sign ? `<div class="sign"><div>${T('أعدّه')}</div><div>${T('مدير الموارد البشرية')}</div><div>${T('اعتمده')}</div></div>` : ''}
   <footer>INQLHA · ${T(SUM_TITLE[ent])} · <span class="num">${todayStr()}</span></footer></body></html>`;
@@ -399,7 +463,7 @@ async function rentSummaryPDF(ent, rows, o) {
   const fr = document.createElement('iframe');
   fr.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.appendChild(fr);
-  fr.onload = () => { const imgs = [...fr.contentDocument.images]; Promise.all(imgs.map(i => i.decode ? i.decode().catch(() => {}) : 0)).then(() => setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { alert('مقدرتش أفتح الطباعة. جرّب من متصفح تاني.'); } setTimeout(() => fr.remove(), 60000); }, 500)); };
+  fr.onload = () => { const imgs = [...fr.contentDocument.images]; Promise.all(imgs.map(i => i.decode ? i.decode().catch(() => {}) : 0)).then(() => setTimeout(() => { printFrame(fr); }, 500)); };
   fr.srcdoc = html;
   toast('اختار "Save as PDF" من نافذة الطباعة');
 }

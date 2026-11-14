@@ -337,7 +337,7 @@ async function pqPrint(q) {
   const fr = document.createElement('iframe');
   fr.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
   document.body.appendChild(fr);
-  fr.onload = () => { const imgs = [...fr.contentDocument.images]; Promise.all(imgs.map(i => i.decode ? i.decode().catch(() => {}) : 0)).then(() => setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { alert('مقدرتش أفتح الطباعة. جرّب من متصفح تاني.'); } setTimeout(() => fr.remove(), 60000); }, 500)); };
+  fr.onload = () => { const imgs = [...fr.contentDocument.images]; Promise.all(imgs.map(i => i.decode ? i.decode().catch(() => {}) : 0)).then(() => setTimeout(() => { printFrame(fr); }, 500)); };
   fr.srcdoc = html;
   toast('اختار "Save as PDF" من نافذة الطباعة');
 }

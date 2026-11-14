@@ -1059,3 +1059,18 @@ body.gated .app { visibility: hidden; }
 .sm-note { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: .93rem; }
 .sm-note textarea { height: auto; padding: 8px 12px; resize: vertical; font: inherit; color: var(--ink); }
 @media (max-width: 560px) { .sm-cols { grid-template-columns: 1fr 1fr; } .modal { top: auto; bottom: 0; transform: translateX(-50%); width: 100vw; border-radius: 16px 16px 0 0; max-height: 92dvh; } }
+
+/* ===== file name before every export ===== */
+.fn-ov { position: fixed; inset: 0; z-index: 1000; background: rgba(1, 30, 31, .45); display: grid; place-items: center; padding: 16px; }
+.fn-box { background: var(--surface, #fff); border-radius: 16px; padding: 20px; width: min(460px, 100%); box-shadow: 0 20px 60px rgba(0,0,0,.25); display: flex; flex-direction: column; gap: 10px; }
+.fn-box h3 { margin: 0; font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--brand); }
+.fn-in { display: flex; align-items: stretch; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.fn-in:focus-within { border-color: var(--brand); }
+.fn-in .input { border: 0; border-radius: 0; flex: 1; min-width: 0; box-shadow: none; }
+.fn-ext { display: grid; place-items: center; padding: 0 12px; background: var(--brand-50, #ecf5f4); color: var(--muted); font-size: .9rem; }
+.fn-ext:empty { display: none; }
+.fn-help { color: var(--muted); font-size: .85rem; }
+.fn-act { display: flex; gap: 8px; margin-top: 4px; }
+.sm-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 10px; }
+.sm-filters label { display: flex; flex-direction: column; gap: 4px; font-size: .82rem; color: var(--muted); }
+.sm-filters .select { width: 100%; }
