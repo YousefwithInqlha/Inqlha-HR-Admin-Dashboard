@@ -1059,31 +1059,3 @@ body.gated .app { visibility: hidden; }
 .sm-note { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: .93rem; }
 .sm-note textarea { height: auto; padding: 8px 12px; resize: vertical; font: inherit; color: var(--ink); }
 @media (max-width: 560px) { .sm-cols { grid-template-columns: 1fr 1fr; } .modal { top: auto; bottom: 0; transform: translateX(-50%); width: 100vw; border-radius: 16px 16px 0 0; max-height: 92dvh; } }
-
-/* employee form: fill from the Iqama / licence photos */
-.ai-scan { margin-top: 18px; border: 1.5px dashed #9fd9b4; background: linear-gradient(135deg, #f1fbf5, #ecf5f4); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.ai-head { display: flex; gap: 12px; align-items: flex-start; }
-.ai-head b { display: block; font-size: 1.05rem; font-weight: 600; }
-.ai-head small { color: var(--muted); line-height: 1.6; }
-.ai-ico { width: 40px; height: 40px; border-radius: 12px; background: var(--brand); color: var(--accent); display: grid; place-items: center; flex: none; }
-.ai-ico .ti { font-size: 1.3rem; }
-.ai-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.ai-slot { position: relative; display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; padding: 10px; cursor: pointer; min-width: 0; transition: border-color .15s; }
-.ai-slot:hover, .ai-slot.over { border-color: var(--brand-600); }
-.ai-slot.has { border-color: #3fe06b; }
-.ai-prev { width: 72px; height: 46px; border-radius: 8px; background: var(--brand-50); color: var(--brand); display: grid; place-items: center; flex: none; overflow: hidden; }
-.ai-prev .ti { font-size: 1.4rem; } .ai-prev img { width: 100%; height: 100%; object-fit: cover; }
-.ai-txt { min-width: 0; flex: 1; } .ai-txt b { display: block; font-weight: 500; font-size: .95rem; } .ai-txt small { color: var(--muted); font-size: .82rem; }
-.ai-del { width: 28px; height: 28px; flex: none; }
-.ai-act { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.ai-msg { font-size: .93rem; display: flex; align-items: center; gap: 6px; }
-.ai-msg.busy { color: var(--brand); } .ai-msg.busy .ti { animation: spin 1s linear infinite; }
-.ai-msg.ok { color: var(--ok); } .ai-msg.bad { color: var(--danger); }
-@keyframes spin { to { transform: rotate(360deg); } }
-.ai-warn { margin: 0; padding: 10px 12px; list-style: none; background: var(--warn-bg); color: #7a4800; border-radius: 10px; display: flex; flex-direction: column; gap: 4px; font-size: .9rem; }
-.ai-warn li { display: flex; gap: 6px; align-items: flex-start; }
-.f.ai input, .f.ai select { border-color: #3fe06b; background: #f1fbf5; }
-.ai-tag { margin-top: 4px; font-size: .82rem; color: var(--accent-ink); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.ai-tag.warn { color: var(--warn); }
-.ai-tag .link-btn { font-size: .82rem; padding: 0 6px; }
-@media (max-width: 560px) { .ai-slots { grid-template-columns: 1fr; } }

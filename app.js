@@ -592,7 +592,6 @@ function openForm(ent, idx, prefill = {}, focusKey) {
     <div class="form-wrap" style="${secs.length < 2 ? 'grid-template-columns:1fr' : ''}">
       ${secs.length >= 2 ? `<nav class="form-nav">${secs.map(([t], n) => `<button type="button" data-goto="${n}">${`<span class="n">${n + 1}</span>`}${esc(t)}</button>`).join('')}</nav>` : ''}
       <form class="form-body" id="fbody" novalidate>
-        ${ent === "employees" && typeof aiScanHTML === "function" ? aiScanHTML() : ""}
         ${secs.map(([title, fields], n) => `<section class="fsec" id="sec-${n}" data-sec="${n}"><h3>${icon(SECTION_ICONS[title] || 'point')}${esc(title)}</h3><div class="fgrid">
           ${fields.map(f => `<div class="f ${['textarea', 'photo', 'choice', 'files'].includes(f.t) ? 'full' : ''}" data-f="${f.k}"><label for="f-${f.k}">${f.t === 'photo' ? '' : fIcon(f)}${esc(f.l)}${f.req ? ' <span class="req">*</span>' : ''}</label>${inputFor(f, f.calc ? calcDisplay(f, r[f.k]) : r[f.k])}
             ${f.calc ? `<div class="help">${icon('calculator')}${esc(f.help || 'بيتحسب لوحده')}</div>` : f.help ? `<div class="help">${esc(f.help)}</div>` : ''}<div class="err"></div></div>`).join('')}
@@ -631,7 +630,6 @@ function openForm(ent, idx, prefill = {}, focusKey) {
     body.dispatchEvent(new Event('input'));
   });
   bindFileFields(ent, body, read);
-  if (ent === "employees" && typeof bindAiScan === "function") bindAiScan(panel, body, base);
 const phFile = $('#ph-file', panel);
 if (phFile) {
   const setPhoto = url => { $('[data-k="photo"]', body).value = url; $('#ph-prev', panel).innerHTML = url ? `<img src="${url}" alt="">` : icon('camera'); $('#ph-del', panel).hidden = !url; body.dispatchEvent(new Event('input')); };

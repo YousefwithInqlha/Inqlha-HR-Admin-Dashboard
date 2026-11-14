@@ -26,10 +26,5 @@
         }
       ]
     }
-  ],
-  "functions": {
-    "api/read-card.js": {
-      "maxDuration": 60
-    }
-  }
+  ]
 }
