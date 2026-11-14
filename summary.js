@@ -98,7 +98,8 @@ function bindCarPhotoBox(panel, c) {
   };
 }
 
-/* ---------------- summary PDFs (same look as the payment request) ---------------- */
+/* ---------------- rental summaries: a popup picks Excel or PDF, the period and the columns ----------------
+   Both files follow the payroll summary's design, and every cell is centered. */
 const SUM_ENTS = ['cars', 'properties', 'rentPayments'];
 const money2 = n => num(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 function residentsText(s) {
@@ -113,131 +114,280 @@ function dueTag(d, T) {
 function lastRentPay(no) {
   return DB.rentPayments.filter(p => p.contractNo === no && p.payDate).sort((a, b) => b.payDate.localeCompare(a.payDate))[0];
 }
+const carName = r => [r.brand, r.model, r.year].filter(Boolean).join(' ');
+const isCarPay = r => findEntOfContract(r.contractNo) === 'cars';
 
-/* the rent-payments summary asks for a period first */
+/* the columns each summary can show.
+   on: picked by default · money: summed in the total row · date · pdf: PDF only · v: the value (default r[k]) */
+const SUM_COLS = {
+  cars: [
+    { k: 'photo', l: 'صورة العربية', on: true, pdf: true },
+    { k: 'car', l: 'السيارة', on: true, v: r => carName(r) || r.carType },
+    { k: 'carType', l: 'نوع السيارة', on: true },
+    { k: 'plate', l: 'رقم السيارة', on: true },
+    { k: 'color', l: 'اللون' },
+    { k: 'city', l: 'المدينة', on: true },
+    { k: 'driver', l: 'مين راكبها', on: true, v: r => r.driver ? empName(r.driver) : '' },
+    { k: 'rentalOffice', l: 'مكتب الإيجار', on: true },
+    { k: 'officeIban', l: 'IBAN مكتب الإيجار' },
+    { k: 'price', l: 'الإيجار الشهري', on: true, money: true },
+    { k: 'payPeriod', l: 'مدة الدفع' },
+    { k: 'periodAmount', l: 'المبلغ في الفترة', money: true },
+    { k: 'nextPayment', l: 'الدفعة الجاية', on: true, date: true },
+    { k: 'lastPay', l: 'آخر دفعة', date: true, v: r => (lastRentPay(r.contractNo) || {}).payDate },
+    { k: 'startDate', l: 'بداية الإيجار', date: true },
+    { k: 'endDate', l: 'نهاية العقد', date: true },
+    { k: 'regExpiry', l: 'انتهاء الاستمارة', date: true },
+    { k: 'insuranceExpiry', l: 'انتهاء التأمين', date: true },
+    { k: 'status', l: 'حالة العقد', on: true },
+    { k: 'contractNo', l: 'رقم العقد' },
+  ],
+  properties: [
+    { k: 'contractNo', l: 'رقم العقد' },
+    { k: 'propType', l: 'النوع', on: true },
+    { k: 'city', l: 'المدينة', on: true },
+    { k: 'address', l: 'العنوان' },
+    { k: 'residents', l: 'الساكنين', v: r => residentsText(r.residents) },
+    { k: 'landlord', l: 'المؤجر', on: true },
+    { k: 'landlordIban', l: 'IBAN المؤجر' },
+    { k: 'price', l: 'الإيجار الشهري', on: true, money: true },
+    { k: 'payPeriod', l: 'مدة الدفع', on: true },
+    { k: 'periodAmount', l: 'المبلغ في الفترة', on: true, money: true },
+    { k: 'nextPayment', l: 'الدفعة الجاية', on: true, date: true },
+    { k: 'lastPay', l: 'آخر دفعة', date: true, v: r => (lastRentPay(r.contractNo) || {}).payDate },
+    { k: 'startDate', l: 'بداية العقد', date: true },
+    { k: 'endDate', l: 'نهاية العقد', on: true, date: true },
+    { k: 'status', l: 'حالة العقد', on: true },
+  ],
+  rentPayments: [
+    { k: 'code', l: 'رقم الدفعة' },
+    { k: 'contract', l: 'العقد', on: true, v: r => contractLabel(r.contractNo) },
+    { k: 'contractNo', l: 'رقم العقد' },
+    { k: 'kind', l: 'النوع', on: true, v: r => isCarPay(r) ? 'سيارة' : 'سكن / مكتب' },
+    { k: 'payDate', l: 'تاريخ الدفع', on: true, date: true },
+    { k: 'from', l: 'الفترة من', on: true, date: true },
+    { k: 'to', l: 'الفترة إلى', on: true, date: true },
+    { k: 'method', l: 'طريقة الدفع', on: true },
+    { k: 'amount', l: 'المبلغ', on: true, money: true },
+    { k: 'notes', l: 'ملاحظات' },
+  ],
+};
+const SUM_TITLE = { cars: 'ملخص إيجارات السيارات', properties: 'ملخص إيجارات السكن والمكاتب', rentPayments: 'ملخص دفعات الإيجار' };
+const SUM_FILE = { cars: 'Car rentals summary', properties: 'Housing & offices rent summary', rentPayments: 'Rent payments summary' };
+const sumVal = (c, r) => { const v = c.v ? c.v(r) : r[c.k]; return v == null ? '' : v; };
+
+/* the last choices are remembered per page, in this browser only */
+const SUM_PREF_KEY = 'inqlha-sum-prefs';
+function sumPrefs(ent) { try { return (JSON.parse(localStorage.getItem(SUM_PREF_KEY)) || {})[ent] || null; } catch (e) { return null; } }
+function sumSavePrefs(ent, p) { try { const all = JSON.parse(localStorage.getItem(SUM_PREF_KEY)) || {}; all[ent] = p; localStorage.setItem(SUM_PREF_KEY, JSON.stringify(all)); } catch (e) { /* private window */ } }
+
+/* the KPIs at the top of both files */
+function sumStats(ent, rows) {
+  const R = tr('ر.س');
+  if (ent === 'rentPayments') {
+    const total = rows.reduce((s, r) => s + num(r.amount), 0), cars = rows.filter(isCarPay).reduce((s, r) => s + num(r.amount), 0);
+    return [['عدد الدفعات', rows.length], ['دفعات السيارات', `${money2(cars)} ${R}`], ['دفعات السكن والمكاتب', `${money2(total - cars)} ${R}`], ['الإجمالي', `${money2(total)} ${R}`, 1]];
+  }
+  const monthly = rows.reduce((s, r) => s + num(r.price), 0);
+  const next = rows.map(r => r.nextPayment).filter(Boolean).sort()[0];
+  const late = rows.filter(r => r.nextPayment && daysUntil(r.nextPayment) < 0).length;
+  return [[ent === 'cars' ? 'عدد السيارات' : 'عدد العقارات', rows.length], ['أقرب دفعة', next ? fmtDate(next) : '—'], ['دفعات متأخرة', late], ['إجمالي الإيجار الشهري', `${money2(monthly)} ${R}`, 1]];
+}
+
 function openSummary(ent, rows) {
   if (!rows.length) return toast('مفيش حاجة في القايمة تطلع في الملخص');
-  if (ent !== 'rentPayments') return printSummary(ent, rows);
+  rows = rows.map(r => withCalc(ent, r));
+  const cols = SUM_COLS[ent], pref = sumPrefs(ent) || {};
+  const picked = new Set(pref.cols || cols.filter(c => c.on).map(c => c.k));
+  const st = { fmt: pref.fmt || 'pdf', range: '0', sign: pref.sign !== false };
+  const isPay = ent === 'rentPayments';
   const t = todayStr(), y = t.slice(0, 4), m = t.slice(0, 7);
   const ranges = [['الشهر ده', m + '-01', t], ['آخر 3 شهور', addMonths(t, -3), t], ['السنة دي', y + '-01-01', t], ['كل الدفعات', '', '']];
-  const panel = openLayer(`<div class="d-head"><span class="avatar lg sq">${icon('file-type-pdf')}</span><div class="t"><h2>ملخص دفعات الإيجار</h2><p>اختار الفترة</p></div><button class="icon-btn" id="sm-x" aria-label="إغلاق">${icon('x')}</button></div>
-    <div class="d-body"><p class="muted" style="margin:0 0 10px">الملخص هيطلع للدفعات اللي ظاهرة في القايمة (${rows.length}) في الفترة اللي تختارها.</p>
-      <div class="choice-row" id="sm-r">${ranges.map((r, i) => `<button type="button" class="choice-pill ${i === 0 ? 'on' : ''}" data-i="${i}">${r[0]}</button>`).join('')}<button type="button" class="choice-pill" data-i="c">من تاريخ لتاريخ</button></div>
-      <div class="sm-custom" id="sm-c" hidden><label>من<input type="date" class="input" id="sm-from" value="${m}-01"></label><label>إلى<input type="date" class="input" id="sm-to" value="${t}"></label></div>
-      <div class="actions" style="margin-top:16px"><button class="btn primary" id="sm-go">${icon('download')}تحميل الملخص</button></div></div>`);
-  let pick = '0';
-  $('#sm-x', panel).onclick = closeLayer;
-  $$('#sm-r .choice-pill', panel).forEach(b => b.onclick = () => { pick = b.dataset.i; $$('#sm-r .choice-pill', panel).forEach(x => x.classList.toggle('on', x === b)); $('#sm-c', panel).hidden = pick !== 'c'; });
+
+  const panel = openLayer(`<div class="d-head"><span class="avatar lg sq">${icon('file-download')}</span><div class="t"><h2>${SUM_TITLE[ent]}</h2><p>${isPay ? 'الدفعات' : 'العقود'} اللي ظاهرة في القايمة دلوقتي <b class="num">${rows.length}</b></p></div><button class="icon-btn" id="sm-x" aria-label="إغلاق">${icon('x')}</button></div>
+    <div class="d-body sm-body">
+      <section class="sm-sec"><h4>${icon('file-export')}الصيغة</h4>
+        <div class="fmt sm-fmt">
+          <button type="button" class="xl" data-fmt="xlsx">${icon('file-spreadsheet')}<b>Excel</b><small>جدول تقدر تعدّل فيه</small></button>
+          <button type="button" class="pdf" data-fmt="pdf">${icon('file-type-pdf')}<b>PDF</b><small>ملف منسق للطباعة والإرسال</small></button>
+        </div></section>
+      ${isPay ? `<section class="sm-sec"><h4>${icon('calendar')}الفترة</h4>
+        <div class="choice-row" id="sm-r">${ranges.map((r, i) => `<button type="button" class="choice-pill ${i === 0 ? 'on' : ''}" data-i="${i}">${r[0]}</button>`).join('')}<button type="button" class="choice-pill" data-i="c">من تاريخ لتاريخ</button></div>
+        <div class="sm-custom" id="sm-c" hidden><label>من<input type="date" class="input" id="sm-from" value="${m}-01"></label><label>إلى<input type="date" class="input" id="sm-to" value="${t}"></label></div></section>` : ''}
+      <section class="sm-sec"><h4>${icon('list-check')}البيانات اللي تطلع في الملف <span class="sm-links"><button type="button" class="link-btn" id="sm-all">الكل</button><button type="button" class="link-btn" id="sm-def">الأساسي</button></span></h4>
+        <div class="sm-cols" id="sm-cols">${cols.map(c => `<label class="sm-col ${c.pdf ? 'pdf-only' : ''}"><input type="checkbox" value="${c.k}" ${picked.has(c.k) ? 'checked' : ''}><span>${c.l}</span>${c.pdf ? `<small>PDF بس</small>` : ''}</label>`).join('')}</div></section>
+      <section class="sm-sec"><h4>${icon('adjustments')}إضافات</h4>
+        <label class="sm-col sm-wide"><input type="checkbox" id="sm-sign" ${st.sign ? 'checked' : ''}><span>خانات التوقيع في الآخر (أعدّه · مدير الموارد البشرية · اعتمده)</span></label>
+        <label class="sm-note">ملاحظة تظهر في الملف (اختياري)<textarea class="input" id="sm-note" rows="2" placeholder="مثال: ملخص لطلب تجديد العقود"></textarea></label></section>
+    </div>
+    <div class="d-foot"><button class="btn primary" id="sm-go">${icon('download')}<span id="sm-go-t"></span></button><button class="btn ghost" id="sm-cancel">إلغاء</button><span class="note" id="sm-count"></span></div>`, 'modal');
+
+  const boxes = () => $$('#sm-cols input', panel);
+  const sync = () => {
+    $$('[data-fmt]', panel).forEach(b => b.classList.toggle('on', b.dataset.fmt === st.fmt));
+    panel.classList.toggle('is-xlsx', st.fmt === 'xlsx');
+    $('#sm-go-t', panel).textContent = tr(st.fmt === 'pdf' ? 'تحميل PDF' : 'تحميل Excel');
+    const n = boxes().filter(b => b.checked && !(st.fmt === 'xlsx' && cols.find(c => c.k === b.value).pdf)).length;
+    $('#sm-count', panel).textContent = `${n} ${tr('خانة')}`;
+    $('#sm-go', panel).disabled = !n;
+  };
+  $$('[data-fmt]', panel).forEach(b => b.onclick = () => { st.fmt = b.dataset.fmt; sync(); });
+  boxes().forEach(b => b.onchange = sync);
+  $('#sm-all', panel).onclick = () => { boxes().forEach(b => b.checked = true); sync(); };
+  $('#sm-def', panel).onclick = () => { boxes().forEach(b => b.checked = !!cols.find(c => c.k === b.value).on); sync(); };
+  $('#sm-x', panel).onclick = $('#sm-cancel', panel).onclick = closeLayer;
+  if (isPay) $$('#sm-r .choice-pill', panel).forEach(b => b.onclick = () => { st.range = b.dataset.i; $$('#sm-r .choice-pill', panel).forEach(x => x.classList.toggle('on', x === b)); $('#sm-c', panel).hidden = st.range !== 'c'; });
+  sync();
+
   $('#sm-go', panel).onclick = () => {
-    const [label, from, to] = pick === 'c' ? ['', $('#sm-from', panel).value, $('#sm-to', panel).value] : ranges[+pick];
-    const sel = rows.filter(r => (!from || (r.payDate || '') >= from) && (!to || (r.payDate || '') <= to));
-    if (!sel.length) return toast('مفيش دفعات في الفترة دي');
+    const keys = boxes().filter(b => b.checked).map(b => b.value);
+    const use = cols.filter(c => keys.includes(c.k) && !(st.fmt === 'xlsx' && c.pdf));
+    let sel = rows, rangeLabel = '';
+    if (isPay) {
+      const [label, from, to] = st.range === 'c' ? ['', $('#sm-from', panel).value, $('#sm-to', panel).value] : ranges[+st.range];
+      sel = rows.filter(r => (!from || (r.payDate || '') >= from) && (!to || (r.payDate || '') <= to)).sort((a, b) => String(a.payDate).localeCompare(String(b.payDate)));
+      if (!sel.length) return toast('مفيش دفعات في الفترة دي');
+      rangeLabel = label ? tr(label) : `${from || '…'} → ${to || '…'}`;
+    }
+    const opts = { cols: use, sign: $('#sm-sign', panel).checked, note: $('#sm-note', panel).value.trim(), rangeLabel };
+    sumSavePrefs(ent, { fmt: st.fmt, cols: keys, sign: opts.sign });
     closeLayer();
-    printSummary(ent, sel, label || `${from || '…'} → ${to || '…'}`, from, to);
+    if (st.fmt === 'xlsx') rentSummaryXlsx(ent, sel, opts); else rentSummaryPDF(ent, sel, opts);
   };
 }
 
-async function printSummary(ent, rows, rangeLabel = '', from = '', to = '') {
-  const en = LANG === 'en', T = s => esc(tr(s));
+/* ---------- Excel: same styling as the payroll summary, everything centered ---------- */
+function rentSummaryXlsx(ent, rows, o) {
+  if (!window.XLSX) return alert('مكتبة Excel محتاجة نت. جرّب PDF أو اتأكد من الاتصال.');
+  const en = LANG === 'en', cols = o.cols, W = cols.length + 1;
+  const cell = (c, r) => { const v = sumVal(c, r); return c.money ? round2(num(v)) : typeof v === 'string' ? tr(v) : v; };
+  const head = ['#', ...cols.map(c => tr(c.l))];
+  const body = rows.map((r, i) => [i + 1, ...cols.map(c => cell(c, r))]);
+  const totalRow = [tr('الإجمالي'), ...cols.map(c => c.money ? round2(rows.reduce((s, r) => s + num(sumVal(c, r)), 0)) : '')];
+  const hasMoney = cols.some(c => c.money);
+  const meta = [`${tr('التاريخ')}: ${todayStr()}`, o.rangeLabel && `${tr('الفترة')}: ${o.rangeLabel}`, `${tr('العدد')}: ${rows.length}`].filter(Boolean).join('   ·   ');
+  const stats = sumStats(ent, rows);
+
+  const aoa = [[`INQLHA · ${tr(SUM_TITLE[ent])}`], [meta]];
+  if (o.note) aoa.push([o.note]);
+  aoa.push([]);
+  const H = aoa.length; aoa.push(head, ...body);
+  const last = H + body.length; let totR = -1;
+  if (hasMoney) { totR = aoa.length; aoa.push(totalRow); }
+  aoa.push([]);
+  const statR = aoa.length; stats.forEach(([l, v]) => aoa.push([tr(l), '', v]));
+  if (o.sign) { aoa.push([], []); aoa.push([tr('أعدّه'), '', tr('مدير الموارد البشرية'), '', tr('اعتمده')]); }
+  const signR = o.sign ? aoa.length - 1 : -1;
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const span = (r, c1, c2) => ({ s: { r, c: c1 }, e: { r, c: c2 } });
+  const merges = [span(0, 0, W - 1), span(1, 0, W - 1)];
+  if (o.note) merges.push(span(2, 0, W - 1));
+  stats.forEach((_, i) => merges.push(span(statR + i, 0, 1), span(statR + i, 2, Math.max(3, Math.min(W - 1, 4)))));
+  ws['!merges'] = merges;
+
+  const line = { style: 'thin', color: { rgb: 'D5E3E2' } }, border = { top: line, bottom: line, left: line, right: line };
+  const font = (x = {}) => ({ name: 'Calibri', sz: 11, color: { rgb: '0E2423' }, ...x });
+  const center = { horizontal: 'center', vertical: 'center', wrapText: true, readingOrder: en ? 1 : 2 };
+  const set = (r, c, s) => { const ref = XLSX.utils.encode_cell({ r, c }); if (!ws[ref]) ws[ref] = { t: 's', v: '' }; ws[ref].s = { alignment: center, ...s }; };
+  set(0, 0, { font: font({ sz: 16, bold: true, color: { rgb: '014546' } }) });
+  set(1, 0, { font: font({ sz: 10, color: { rgb: '5F7674' } }) });
+  if (o.note) set(2, 0, { font: font({ sz: 10, italic: true, color: { rgb: '8A5300' } }), fill: { fgColor: { rgb: 'FFF8EA' } } });
+  for (let c = 0; c < W; c++) {
+    const col = cols[c - 1] || {};
+    set(H, c, { fill: { fgColor: { rgb: '014546' } }, font: font({ bold: true, color: { rgb: 'FFFFFF' }, sz: 10.5 }), border: { ...border, top: { style: 'thin', color: { rgb: '0B6062' } }, bottom: { style: 'thin', color: { rgb: '0B6062' } } } });
+    for (let r = H + 1; r <= last; r++) {
+      const row = rows[r - H - 1], v = col.k ? sumVal(col, row) : '';
+      const late = col.k === 'nextPayment' && v && daysUntil(v) < 0, off = col.k === 'status' && v && v !== 'ساري';
+      set(r, c, { font: font({ bold: !!col.money, color: { rgb: late || off ? 'A32020' : '0E2423' } }), border, numFmt: col.money ? '#,##0.00' : undefined,
+        fill: { fgColor: { rgb: late || off ? 'FDE3E3' : col.money ? 'E9F9EF' : (r - H) % 2 ? 'FFFFFF' : 'F6FAF9' } } });
+    }
+    if (totR > 0) set(totR, c, { font: font({ bold: true, color: { rgb: '014546' } }), border, numFmt: '#,##0.00', fill: { fgColor: { rgb: 'D5E8E7' } } });
+  }
+  stats.forEach(([, , hl], i) => { const r = statR + i; for (let c = 0; c <= Math.max(3, Math.min(W - 1, 4)); c++) set(r, c, { border, font: font({ bold: c >= 2 || !!hl, color: { rgb: c >= 2 ? '014546' : '0E2423' } }), fill: { fgColor: { rgb: hl ? 'D5E8E7' : 'ECF5F4' } } }); });
+  if (signR > 0) [0, 2, 4].forEach(c => set(signR, c, { font: font({ color: { rgb: '5F7674' } }), border: { top: { style: 'thin', color: { rgb: '9FB3B1' } } } }));
+
+  /* width from the longest value in each column */
+  const len = v => String(v ?? '').length;
+  ws['!cols'] = head.map((h, c) => ({ wch: Math.min(40, Math.max(c ? 12 : 6, len(h) + 4, ...body.map(r => len(typeof r[c] === 'number' ? money2(r[c]) : r[c]) + 3))) }));
+  ws['!rows'] = []; ws['!rows'][0] = { hpt: 30 }; ws['!rows'][1] = { hpt: 18 }; ws['!rows'][H] = { hpt: 30 };
+  ws['!freeze'] = { xSplit: 0, ySplit: H + 1 };
+  const wb = XLSX.utils.book_new();
+  wb.Workbook = { Views: [{ RTL: !en }] };
+  XLSX.utils.book_append_sheet(wb, ws, 'Summary');
+  XLSX.writeFile(wb, `INQLHA - ${SUM_FILE[ent]} - ${todayStr()}.xlsx`);
+  toast('اتنزل الملخص Excel');
+}
+
+/* ---------- PDF: the payroll summary's design (header, KPIs, table, total, signatures), everything centered ---------- */
+async function rentSummaryPDF(ent, rows, o) {
+  const en = LANG === 'en', T = s => esc(tr(s)), cols = o.cols;
   const logo = new URL('logo-wide.jpg', location.href).href;
-  const title = { cars: 'ملخص إيجارات السيارات', properties: 'ملخص إيجارات السكن والمكاتب', rentPayments: 'ملخص دفعات الإيجار' }[ent];
   const R = ' ' + T('ر.س');
-  let stats = [], body = '';
+  const photoCol = cols.some(c => c.k === 'photo');
+  let pics = [];
+  if (photoCol) { toast('بيجهز صور العربيات...'); pics = await Promise.all(rows.map(r => carPhoto(carRow(r.contractNo) || r).catch(() => ''))); }
+  const landscape = cols.length > 7;
 
-  if (ent === 'cars') {
-    toast('بيجهز صور العربيات...');
-    const pics = await Promise.all(rows.map(r => carPhoto(carRow(r.contractNo) || r).catch(() => '')));
-    const monthly = rows.reduce((s, r) => s + num(r.price), 0);
-    const next = rows.map(r => r.nextPayment).filter(Boolean).sort()[0];
-    stats = [['عدد السيارات', rows.length], ['إجمالي الإيجار الشهري', money2(monthly) + R], ['أقرب دفعة', next ? fmtDate(next) : '—']];
-    body = rows.map((r, n) => {
-      const lp = lastRentPay(r.contractNo);
-      const name = [r.brand, r.model, r.year].filter(Boolean).join(' ');
-      return `<div class="car"><div class="ph">${pics[n] ? `<img src="${pics[n]}" alt="">` : `<span>${T('مفيش صورة')}</span>`}</div>
-        <div class="in"><div class="top"><div><b>${esc(name || r.carType || '—')}</b><small>${T(r.carType || '')}${r.color ? ' · ' + esc(r.color) : ''} · <span class="plate">${esc(r.plate || '')}</span>${r.city ? ' · ' + T(r.city) : ''}</small></div>
-          <div class="amt"><b><span class="num">${money2(r.price)}</span>${R}</b><small>${T('شهري')}${r.payPeriod && r.payPeriod !== 'شهري' ? ` · ${T(r.payPeriod)}: <span class="num">${money2(r.periodAmount)}</span>` : ''}</small></div></div>
-          <dl><div><dt>${T('المعرض / مكتب الإيجار')}</dt><dd>${esc(r.rentalOffice || '—')}</dd></div>
-            <div><dt>${T('مين راكبها')}</dt><dd>${r.driver ? `${esc(empName(r.driver))} <span class="muted">${esc(r.driver)}</span>` : '—'}</dd></div>
-            <div><dt>${T('الدفعة الجاية')}</dt><dd>${r.nextPayment ? `<span class="num">${esc(r.nextPayment)}</span> ${dueTag(r.nextPayment, T)}` : '—'}</dd></div>
-            <div><dt>${T('آخر دفعة')}</dt><dd>${lp ? `<span class="num">${esc(lp.payDate)}</span> · <span class="num">${money2(lp.amount)}</span>${R}` : '—'}</dd></div></dl>
-          ${r.status && r.status !== 'ساري' ? `<i class="tag bad">${T(r.status)}</i>` : ''}</div></div>`;
-    }).join('');
-  }
+  const td = (c, r, n) => {
+    if (c.k === 'photo') return `<td class="ph">${pics[n] ? `<img src="${pics[n]}" alt="">` : `<span>${T('مفيش صورة')}</span>`}</td>`;
+    const v = sumVal(c, r);
+    if (v === '' || v == null) return '<td class="mut">—</td>';
+    if (c.money) return `<td class="amt"><span class="num">${money2(v)}</span></td>`;
+    if (c.date) return `<td><span class="num">${esc(v)}</span>${c.k === 'nextPayment' ? dueTag(v, T) : ''}</td>`;
+    if (c.k === 'status') return `<td><i class="tag ${v === 'ساري' ? 'ok' : 'bad'}">${T(v)}</i></td>`;
+    if (c.k === 'plate') return `<td><span class="plate">${esc(v)}</span></td>`;
+    if (/Iban/.test(c.k) || c.k === 'contractNo' || c.k === 'code') return `<td><span class="num">${esc(v)}</span></td>`;
+    if (c.k === 'car' || c.k === 'contract') return `<td><b>${T(v)}</b></td>`;
+    return `<td class="${c.k === 'residents' || c.k === 'address' || c.k === 'notes' ? 'wrap' : ''}">${T(v)}</td>`;
+  };
+  const money = cols.filter(c => c.money);
+  const foot = money.length ? `<tfoot><tr><td>${T('الإجمالي')}</td>${cols.map(c => c.money ? `<td><span class="num">${money2(rows.reduce((s, r) => s + num(sumVal(c, r)), 0))}</span>${R}</td>` : '<td></td>').join('')}</tr></tfoot>` : '';
+  const stats = sumStats(ent, rows);
 
-  if (ent === 'properties') {
-    const monthly = rows.reduce((s, r) => s + num(r.price), 0);
-    const next = rows.map(r => r.nextPayment).filter(Boolean).sort()[0];
-    stats = [['عدد العقارات', rows.length], ['إجمالي الإيجار الشهري', money2(monthly) + R], ['أقرب دفعة', next ? fmtDate(next) : '—']];
-    body = rows.map((r, n) => {
-      const lp = lastRentPay(r.contractNo);
-      return `<div class="item"><span class="n">${n + 1}</span><div><b>${T(r.propType || '')} ${T(r.city || '')}</b><small>${esc(r.address || '')}${r.address ? ' · ' : ''}${esc(r.contractNo)}</small>
-        <dl><div><dt>${T('المؤجر')}</dt><dd>${esc(r.landlord || '—')}</dd></div>
-          <div><dt>${T('مدة الدفع')}</dt><dd>${T(r.payPeriod || '—')} · <span class="num">${money2(r.periodAmount)}</span>${R}</dd></div>
-          <div><dt>${T('الدفعة الجاية')}</dt><dd>${r.nextPayment ? `<span class="num">${esc(r.nextPayment)}</span> ${dueTag(r.nextPayment, T)}` : '—'}</dd></div>
-          <div><dt>${T('آخر دفعة')}</dt><dd>${lp ? `<span class="num">${esc(lp.payDate)}</span>` : '—'}</dd></div>
-          <div><dt>${T('نهاية العقد')}</dt><dd>${r.endDate ? `<span class="num">${esc(r.endDate)}</span>` : '—'}</dd></div>
-          ${r.residents ? `<div class="wide"><dt>${T('الساكنين')}</dt><dd>${esc(residentsText(r.residents))}</dd></div>` : ''}</dl>
-        ${r.status && r.status !== 'ساري' ? `<i class="tag bad">${T(r.status)}</i>` : ''}</div>
-        <div class="amt"><b><span class="num">${money2(r.price)}</span>${R}</b><small>${T('شهري')}</small></div></div>`;
-    }).join('');
-  }
-
-  if (ent === 'rentPayments') {
-    rows = rows.slice().sort((a, b) => String(a.payDate).localeCompare(String(b.payDate)));
-    const isCar = r => findEntOfContract(r.contractNo) === 'cars';
-    const total = rows.reduce((s, r) => s + num(r.amount), 0);
-    const cars = rows.filter(isCar).reduce((s, r) => s + num(r.amount), 0);
-    stats = [['عدد الدفعات', rows.length], ['دفعات السيارات', money2(cars) + R], ['دفعات السكن والمكاتب', money2(total - cars) + R]];
-    body = `<table><thead><tr><th>#</th><th>${T('العقد')}</th><th>${T('تاريخ الدفع')}</th><th>${T('الفترة')}</th><th>${T('طريقة الدفع')}</th><th>${T('المبلغ')}</th></tr></thead><tbody>
-      ${rows.map((r, n) => `<tr><td>${n + 1}</td><td><b>${T(contractLabel(r.contractNo))}</b><small>${esc(r.contractNo)} · ${T(isCar(r) ? 'سيارة' : 'سكن / مكتب')}</small></td><td class="num">${esc(r.payDate || '—')}</td><td class="num">${r.from || r.to ? `${esc(r.from || '…')} → ${esc(r.to || '…')}` : '—'}</td><td>${T(r.method || '—')}</td><td class="num"><b>${money2(r.amount)}</b></td></tr>`).join('')}
-      </tbody></table>
-      <div class="total"><span>${T('الإجمالي')}</span><b><span class="num">${money2(total)}</span>${R}</b></div>`;
-  }
-  if (ent !== 'rentPayments') {
-    const tot = rows.reduce((s, r) => s + num(r.price), 0);
-    body += `<div class="total"><span>${T('إجمالي الإيجار الشهري')}</span><b><span class="num">${money2(tot)}</span>${R}</b></div>`;
-  }
-
-  const html = `<!DOCTYPE html><html lang="${en ? 'en' : 'ar'}" dir="${en ? 'ltr' : 'rtl'}"><head><meta charset="utf-8"><title>${T(title)}</title>
+  const html = `<!DOCTYPE html><html lang="${en ? 'en' : 'ar'}" dir="${en ? 'ltr' : 'rtl'}"><head><meta charset="utf-8"><title>INQLHA - ${SUM_FILE[ent]} - ${todayStr()}</title>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    @page { size: A4 portrait; margin: 14mm; }
+    @page { size: A4 ${landscape ? 'landscape' : 'portrait'}; margin: 12mm; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { font-family: "IBM Plex Sans Arabic", system-ui, sans-serif; color: #0e2423; margin: 0; font-size: 11px; }
-    header { display: flex; align-items: center; justify-content: space-between; background: #014546; color: #fff; border-radius: 10px; padding: 14px 18px; }
-    header img { height: 44px; } header h1 { margin: 0; font-size: 19px; font-weight: 600; } header p { margin: 2px 0 0; color: rgba(255,255,255,.7); }
-    .strip { height: 3px; background: #55f47f; border-radius: 2px; margin: 6px 0 12px; }
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
-    .stats div { background: #f3f7f7; border-radius: 8px; padding: 8px 12px; } .stats small { display: block; color: #5d7473; } .stats b { font-size: 14px; font-weight: 600; }
+    body { font-family: "IBM Plex Sans Arabic", system-ui, sans-serif; color: #0e2423; margin: 0; font-size: ${landscape ? 9.5 : 10}px; text-align: center; background: #fff; }
+    :root { color-scheme: light; }
+    header { background: #014546; color: #fff; border-radius: 10px; padding: 12px 18px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    header img { height: 38px; border-radius: 4px; }
+    header h1 { margin: 2px 0 0; font-size: 18px; font-weight: 600; }
+    header p { margin: 0; color: rgba(255,255,255,.72); font-size: 10.5px; }
+    .strip { height: 3px; background: #55f47f; border-radius: 2px; margin: 6px 0 10px; }
+    .note { background: #fff8ea; color: #8a5300; border-radius: 8px; padding: 7px 12px; margin-bottom: 10px; font-size: 10.5px; }
+    .kpis { display: grid; grid-template-columns: repeat(${stats.length}, 1fr); gap: 8px; margin-bottom: 10px; }
+    .kpi { border: 1px solid #dfe9e8; border-radius: 8px; padding: 7px 10px; }
+    .kpi small { color: #6b8381; display: block; font-size: 9px; } .kpi b { font-size: 13px; font-weight: 600; }
+    .kpi.hl { background: #014546; color: #fff; border-color: #014546; } .kpi.hl small { color: rgba(255,255,255,.7); } .kpi.hl b { color: #55f47f; }
     .num { direction: ltr; unicode-bidi: embed; font-variant-numeric: tabular-nums; }
-    .muted { color: #5d7473; }
-    .car { display: grid; grid-template-columns: 46mm 1fr; gap: 12px; padding: 10px; border-radius: 10px; margin-bottom: 8px; background: #f3f7f7; break-inside: avoid; }
-    .car .ph { background: #fff; border-radius: 8px; height: 32mm; display: grid; place-items: center; overflow: hidden; }
-    .car .ph img { width: 100%; height: 100%; object-fit: cover; } .car .ph span { color: #8aa09e; }
-    .top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
-    .top b, .item > div > b { font-size: 13px; font-weight: 600; } .top small, .item small { display: block; color: #5d7473; margin-top: 2px; }
-    .plate { background: #fff; border: 1px solid #c9d6d5; border-radius: 4px; padding: 0 5px; color: #0e2423; }
-    .amt { text-align: end; white-space: nowrap; } .amt b { font-size: 14px; font-weight: 600; display: block; } .amt small { color: #5d7473; }
-    dl { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 8px 0 0; }
-    dl div { background: #fff; border-radius: 6px; padding: 4px 8px; } dl .wide { grid-column: 1 / -1; }
-    dt { color: #5d7473; font-size: 9.5px; } dd { margin: 0; font-weight: 500; }
-    .item { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; background: #f3f7f7; break-inside: avoid; }
-    .item .n { width: 24px; height: 24px; border-radius: 50%; background: #014546; color: #fff; display: grid; place-items: center; font-size: 10px; }
-    .tag { font-style: normal; font-size: 9.5px; border-radius: 4px; padding: 1px 6px; margin-inline-start: 4px; display: inline-block; }
-    .tag.bad { background: #fde3e3; color: #a32020; } .tag.warn { background: #fff3dc; color: #8a5300; }
-    .car > .in > .tag { margin: 6px 0 0; }
-    table { width: 100%; border-collapse: separate; border-spacing: 0 4px; } th { text-align: start; color: #5d7473; font-weight: 500; font-size: 10px; padding: 0 8px; }
-    td { background: #f3f7f7; padding: 7px 8px; } td:first-child { border-radius: 0 6px 6px 0; } td:last-child { border-radius: 6px 0 0 6px; }
-    [dir=ltr] td:first-child { border-radius: 6px 0 0 6px; } [dir=ltr] td:last-child { border-radius: 0 6px 6px 0; }
-    td small { display: block; color: #5d7473; } tr { break-inside: avoid; }
-    .total { display: flex; justify-content: space-between; align-items: center; background: #014546; color: #fff; border-radius: 8px; padding: 12px 16px; margin-top: 10px; font-size: 13px; break-inside: avoid; }
-    .total b { color: #55f47f; font-size: 18px; }
-    footer { margin-top: 18px; color: #8aa09e; font-size: 9px; display: flex; justify-content: space-between; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: center; vertical-align: middle; }
+    th { background: #014546; color: #fff; font-weight: 500; padding: 6px 4px; border: 1px solid #0b6062; font-size: ${landscape ? 8.5 : 9}px; }
+    td { padding: 5px 4px; border: 1px solid #e2eaea; background: #fff; }
+    td.wrap { max-width: 150px; } td.mut { color: #9fb3b1; }
+    td.amt { font-weight: 600; background: #e9f9ef !important; }
+    td.ph { padding: 3px; width: 30mm; } td.ph img { width: 28mm; height: 18mm; object-fit: cover; border-radius: 5px; display: block; margin: 0 auto; } td.ph span { color: #9fb3b1; font-size: 8.5px; }
+    tbody tr:nth-child(even) td { background: #f6faf9; }
+    tr { break-inside: avoid; } thead { display: table-header-group; }
+    tfoot td { background: #d5e8e7; font-weight: 600; color: #014546; }
+    .plate { border: 1px solid #c9d6d5; border-radius: 4px; padding: 0 5px; background: #fff; white-space: nowrap; }
+    .tag { font-style: normal; font-size: 8.5px; border-radius: 4px; padding: 1px 6px; display: inline-block; white-space: nowrap; }
+    td .tag { margin-top: 2px; } td .num + .tag { display: block; width: max-content; margin: 2px auto 0; }
+    .tag.ok { background: #e3f6ea; color: #1d6b3c; } .tag.bad { background: #fde3e3; color: #a32020; } .tag.warn { background: #fff3dc; color: #8a5300; }
+    .sign { display: flex; gap: 24px; justify-content: center; margin-top: 34px; break-inside: avoid; }
+    .sign div { width: 180px; border-top: 1px solid #9fb3b1; padding-top: 4px; color: #6b8381; }
+    footer { margin-top: 14px; color: #8aa09e; font-size: 8.5px; }
   </style></head><body>
-  <header><div><h1>${T(title)}</h1><p>${T('التاريخ')}: <span class="num">${todayStr()}</span>${rangeLabel ? ` · ${T('الفترة')}: ${T(rangeLabel)}` : ''}</p></div><img src="${logo}" alt="INQLHA"></header><div class="strip"></div>
-  <div class="stats">${stats.map(([l, v]) => `<div><small>${T(l)}</small><b>${v}</b></div>`).join('')}</div>
-  ${body}
-  <footer><span>INQLHA · ${T(title)}</span><span class="num">${todayStr()}</span></footer></body></html>`;
+  <header><img src="${logo}" alt="INQLHA"><h1>${T(SUM_TITLE[ent])}</h1><p>${T('التاريخ')}: <span class="num">${todayStr()}</span>${o.rangeLabel ? ` · ${T('الفترة')}: ${esc(o.rangeLabel)}` : ''} · ${T('العدد')}: ${rows.length}</p></header><div class="strip"></div>
+  ${o.note ? `<div class="note">${esc(o.note)}</div>` : ''}
+  <div class="kpis">${stats.map(([l, v, hl]) => `<div class="kpi ${hl ? 'hl' : ''}"><small>${T(l)}</small><b>${esc(v)}</b></div>`).join('')}</div>
+  <table><thead><tr><th>#</th>${cols.map(c => `<th>${T(c.l)}${c.money ? `<br><small>(${T('ر.س')})</small>` : ''}</th>`).join('')}</tr></thead>
+  <tbody>${rows.map((r, n) => `<tr><td>${n + 1}</td>${cols.map(c => td(c, r, n)).join('')}</tr>`).join('')}</tbody>${foot}</table>
+  ${o.sign ? `<div class="sign"><div>${T('أعدّه')}</div><div>${T('مدير الموارد البشرية')}</div><div>${T('اعتمده')}</div></div>` : ''}
+  <footer>INQLHA · ${T(SUM_TITLE[ent])} · <span class="num">${todayStr()}</span></footer></body></html>`;
 
   const fr = document.createElement('iframe');
   fr.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';

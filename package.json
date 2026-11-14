@@ -1,0 +1,8 @@
+{
+  "name": "inqlha-dashboard",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0"
+  }
+}
