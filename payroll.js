@@ -59,6 +59,13 @@ function freshLine(l) {
   const iban = String(e.iban || l.iban || '').replace(/\s/g, '').toUpperCase(), bank = e.bank || l.bank || '';
   return { ...l, name: e.nameAr || l.name, nameEn: e.nameEn || l.nameEn || '', nationality: e.nationality || l.nationality || '', bank, iban, bankCode: bankCodeOf(bank, iban), idNumber: e.idNumber || l.idNumber || '', city: CITY_EN[e.city] || e.city || l.city || '' };
 }
+/* salary files show the English first and second name only, e.g. "Mohamed Ahmed Ali" -> "Mohamed Ahmed" */
+const shortEn = l => String(l.nameEn || '').replace(/[^A-Za-z\s'.-]+/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 2).join(' ');
+/* asks before a salary file goes out with employees that have no English name */
+function okEnNames(lines) {
+  const miss = lines.map(freshLine).filter(l => !shortEn(l)).map(l => l.name);
+  return !miss.length || confirm(`${tr('موظفين مالهمش اسم بالإنجليزي، وهيطلعوا في الملف من غير اسم')}:\n\n${miss.map(n => `• ${n}`).join('\n')}\n\n${tr('ضيف الاسم بالإنجليزي من صفحة الموظف. تنزّل الملف كده برضه؟')}`);
+}
 function lineWarnings(l, cat) {
   l = freshLine(l);
   const w = [];
@@ -66,6 +73,7 @@ function lineWarnings(l, cat) {
     if (!l.iban) w.push('ناقص IBAN');
     if (!l.bankCode) w.push('البنك مش معروف كوده');
     if (!l.idNumber) w.push('ناقص رقم الهوية/الإقامة');
+    if (!shortEn(l)) w.push('ناقص الاسم بالإنجليزي');
   }
   if (lineNet(l) < 0) w.push('الصافي بالسالب');
   return w;
@@ -256,14 +264,14 @@ const r2 = n => round2(num(n));
 function mudadRows(run) {
   const head = ['Bank', 'Account Number', 'Total Salary', 'Transaction Refrence', 'Employee Name', 'National ID/Iqama ID', 'Employee Address', 'Basic Salary', 'Housing Allowance', 'Other Earnings', 'Deduction'];
   const rows = runLines(run).filter(l => l.payMethod === 'مدد').map(freshLine).map(l => [
-    l.bankCode, l.iban, r2(lineNet(l)), 'Salary', l.nationality === 'سعودي' || !l.nameEn ? l.name : l.nameEn, l.idNumber, l.city || 'Riyadh',
+    l.bankCode, l.iban, r2(lineNet(l)), 'Salary', shortEn(l), l.idNumber, l.city || 'Riyadh',
     r2(l.basic), r2(l.housing), r2(num(l.transport) + num(l.cola) + num(l.other) + num(l.overtime) + num(l.telecom)), r2(lineAllDed(l))]);
   return [head, ...rows];
 }
 function exportMudad(run, fmt) {
   const rows = mudadRows(run);
   if (rows.length < 2) return toast('مفيش موظفين بطريقة صرف "مدد" في الشهر ده');
-  const miss = runLines(run).filter(l => l.payMethod === 'مدد').map(freshLine).map(l => [l.name, [!l.bankCode && tr('البنك'), !l.iban && 'IBAN', !l.idNumber && tr('رقم الهوية')].filter(Boolean)]).filter(x => x[1].length);
+  const miss = runLines(run).filter(l => l.payMethod === 'مدد').map(freshLine).map(l => [l.name, [!shortEn(l) && tr('الاسم بالإنجليزي'), !l.bankCode && tr('البنك'), !l.iban && 'IBAN', !l.idNumber && tr('رقم الهوية')].filter(Boolean)]).filter(x => x[1].length);
   if (miss.length && !confirm(`${tr('فيه بيانات ناقصة في ملف مدد')}:\n\n${miss.map(([n, f]) => `• ${n}: ${f.join('، ')}`).join('\n')}\n\n${tr('كمّلها من صفحة الموظف. تنزّل الملف كده برضه؟')}`)) return;
   const name = `Mudad ${fileBase(run)}`;
   if (fmt === 'csv') return download(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), name + '.csv'), toast('اتنزل ملف مدد CSV');
@@ -279,7 +287,7 @@ const SUM_HEAD1 = ['S.N', 'Name', 'Position', 'Basic Salary', 'Housing Allowance
 const SUM_HEAD2 = ['', '', '', '', '', '', 'COLA', 'Others', '', '', '', '', '', '', ''];
 function summaryData(run) {
   const ls = runLines(run);
-  const rows = ls.map((l, i) => [i + 1, l.nameEn || l.name, l.position || '-', r2(l.basic), r2(l.housing), r2(l.transport), r2(l.cola), r2(l.other), r2(l.overtime), r2(l.telecom), r2(lineTotal(l)), r2(l.attendance), r2(lineDed(l)), l.note || '-', r2(lineNet(l))]);
+  const rows = ls.map((l, i) => [i + 1, shortEn(freshLine(l)) || '-', l.position || '-', r2(l.basic), r2(l.housing), r2(l.transport), r2(l.cola), r2(l.other), r2(l.overtime), r2(l.telecom), r2(lineTotal(l)), r2(l.attendance), r2(lineDed(l)), l.note || '-', r2(lineNet(l))]);
   const tot = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14].reduce((o, c) => (o[c] = r2(rows.reduce((s, r) => s + r[c], 0)), o), {});
   const totalRow = SUM_HEAD1.map((_, c) => c === 0 ? 'Total' : c in tot ? tot[c] : '');
   const mudad = r2(ls.filter(l => l.payMethod === 'مدد').reduce((s, l) => s + lineNet(l), 0));
@@ -287,6 +295,7 @@ function summaryData(run) {
   return { ls, rows, totalRow, mudad, transfer };
 }
 function exportSummaryCsv(run) {
+  if (!okEnNames(runLines(run))) return;
   const d = summaryData(run);
   const head = SUM_HEAD1.map((h, i) => i === 6 ? 'Other Allowances - COLA' : i === 7 ? 'Other Allowances - Others' : h);
   const out = [head, ...d.rows, d.totalRow, [], ['', tr('رواتب مدد'), '', d.mudad], ['', tr('رواتب تحويل'), '', d.transfer]];
@@ -294,6 +303,7 @@ function exportSummaryCsv(run) {
 }
 function exportSummaryXlsx(run) {
   if (!window.XLSX) return alert('مكتبة Excel محتاجة نت. جرّب CSV أو PDF.');
+  if (!okEnNames(runLines(run))) return;
   const d = summaryData(run), c = PR_CATS[run.cat], b = monthBounds(run.month);
   const title = `INQLHA · Salaries ${MONTHS_EN_FULL[b.mo - 1]} ${b.y}`;
   const meta = `${c.en}  ·  Payment date: ${run.payDate || '-'}  ·  Currency: ${c.curEn}  ·  Employees: ${d.ls.length}`;
@@ -328,6 +338,7 @@ function exportSummaryXlsx(run) {
 
 /* designed PDF: printable page in a hidden frame -> browser "Save as PDF" */
 function printSummary(run) {
+  if (!okEnNames(runLines(run))) return;
   const d = summaryData(run), c = PR_CATS[run.cat], b = monthBounds(run.month);
   const f = n => typeof n === 'number' ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : esc(n);
   const logo = new URL('logo-wide.jpg', location.href).href;
